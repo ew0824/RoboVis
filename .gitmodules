@@ -1,0 +1,9 @@
+[submodule "external/vuer"]
+	path = external/vuer
+	url = git@github.com:vuer-ai/vuer.git
+[submodule "external/viser"]
+	path = external/viser
+	url = git@github.com:nerfstudio-project/viser.git
+[submodule "external/meshcat"]
+	path = external/meshcat
+	url = git@github.com:meshcat-dev/meshcat.git
