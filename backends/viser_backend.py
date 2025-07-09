@@ -78,8 +78,8 @@ def main(
     ########
     server = viser.ViserServer(
         host="0.0.0.0",
-        port=8080,
-        static_file_handler=False, # this means no frontend will be served
+        port=8080,  # Use different port to avoid built-in frontend
+        serve_static=False, # this doesn't do anything
     )
 
     ########
