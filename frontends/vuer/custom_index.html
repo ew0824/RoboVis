@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Vuer Frontend</title>
+    <style>
+        body { margin: 0; padding: 0; }
+        #vuer-container { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="vuer-container"></div>
+    
+    <script>
+        // Configure the WebSocket connection to your backend
+        window.VUER_CONFIG = {
+            wsUrl: 'ws://localhost:8012',
+            staticUrl: 'http://localhost:8012/static'
+        };
+        
+        // Override the default WebSocket connection
+        window.addEventListener('load', function() {
+            // This will be executed after the Vuer frontend loads
+            console.log('Custom Vuer frontend loaded, connecting to backend...');
+        });
+    </script>
+    
+    <!-- Load the Vuer frontend assets -->
+    <link rel="stylesheet" type="text/css" href="/assets/static/onRenderClient.B48D1ByE.css">
+    <link rel="stylesheet" type="text/css" href="/assets/static/index.BbAhTARb.css">
+    
+    <script id="vike_pageContext" type="application/json">
+        {
+            "someAsyncProps": 42,
+            "abortReason": "!undefined",
+            "_urlRewrite": null,
+            "_urlRedirect": "!undefined",
+            "abortStatusCode": "!undefined",
+            "_abortCall": "!undefined",
+            "_pageContextInitIsPassedToClient": "!undefined",
+            "_pageId": "/pages/index",
+            "routeParams": {},
+            "data": "!undefined"
+        }
+    </script>
+    
+    <script src="/assets/entries/entry-client-routing.CeO7rpJm.js" type="module" async></script>
+    <link rel="modulepreload" href="/assets/entries/pages_index.BcvcR9IC.js" as="script" type="text/javascript">
+    <link rel="modulepreload" href="/assets/chunks/chunk-CnlBHst8.js" as="script" type="text/javascript">
+    <link rel="modulepreload" href="/assets/chunks/chunk-Dd3xtWba.js" as="script" type="text/javascript">
+    <link rel="modulepreload" href="/assets/chunks/chunk-D7HrI6pR.js" as="script" type="text/javascript">
+    <link rel="modulepreload" href="/assets/chunks/chunk-Beb274Qi.js" as="script" type="text/javascript">
+</body>
+</html> 
