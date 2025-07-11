@@ -7,3 +7,6 @@
 [submodule "external/meshcat"]
 	path = external/meshcat
 	url = git@github.com:meshcat-dev/meshcat.git
+[submodule "external/RoboMeshCat"]
+	path = external/RoboMeshCat
+	url = git@github.com:petrikvladimir/RoboMeshCat.git
