@@ -35,7 +35,7 @@ from yourdfpy import URDF
 import viser
 from viser.extras import ViserUrdf
 
-
+  
 def create_robot_control_sliders(
     server: viser.ViserServer, viser_urdf: ViserUrdf
 ) -> tuple[list[viser.GuiInputHandle[float]], list[float]]:

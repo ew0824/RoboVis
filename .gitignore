@@ -24,3 +24,9 @@ src/viser/client/.nodeenv
 examples/assets
 
 **/.claude/settings.local.json
+
+# Meshcat
+node_modules
+dist/main.js
+dist/main.min.js.LICENSE.txt
+yarn-error.log
