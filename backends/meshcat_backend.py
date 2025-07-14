@@ -1,106 +1,45 @@
 #!/usr/bin/env python3
 """
-MeshCat-based URDF visualizer backend using RoboMeshCat.
-WebSocket-only mode - no static file serving.
+Headless MeshCat backend (WebSocket only) using RoboMeshCat.
+Run: python backend_meshcat.py
+Connect frontend: ws://localhost:7000/ws
 """
 
-import os
-import sys
-import time
+import os, time
 from pathlib import Path
-
-# Add the external RoboMeshCat to the path
-sys.path.insert(0, str(Path(__file__).parent.parent / "external" / "RoboMeshCat"))
-
-from robomeshcat import Robot
-import meshcat
-import meshcat.geometry as g
-import meshcat.transformations as tf
+import tornado.web
 import meshcat.servers.zmqserver as zmqserver
-import subprocess
-import threading
-import zmq
+from robomeshcat import Robot
 
+WORKSPACE = Path(__file__).resolve().parents[1]
+URDF      = WORKSPACE / "assets/urdf/eoat_7/urdf/eoat/eoat.urdf"
+MESHFOLD  = WORKSPACE / "assets/urdf/eoat_7/meshes"
 
-def main():
-    """Load and visualize the eoat_7 URDF in MeshCat WebSocket-only mode."""
-    
-    # Set up paths
-    workspace_root = Path(__file__).parent.parent
-    urdf_path = workspace_root / "assets" / "urdf" / "eoat_7" / "urdf" / "eoat" / "eoat.urdf"
-    mesh_folder = workspace_root / "assets" / "urdf" / "eoat_7" / "meshes"
-    
-    # Set ROS_PACKAGE_PATH to help Pinocchio resolve package:// URLs
-    ros_package_path = str(workspace_root / "assets" / "urdf")
-    os.environ["ROS_PACKAGE_PATH"] = ros_package_path
-    
-    print(f"Loading URDF from: {urdf_path}")
-    print(f"Mesh folder: {mesh_folder}")
-    print(f"ROS_PACKAGE_PATH: {ros_package_path}")
-    
-    if not urdf_path.exists():
-        print(f"Error: URDF file not found at {urdf_path}")
-        sys.exit(1)
-    
-    if not mesh_folder.exists():
-        print(f"Error: Mesh folder not found at {mesh_folder}")
-        sys.exit(1)
-    
-    try:
-        # Start MeshCat ZMQ server manually (WebSocket-only)
-        print("Starting MeshCat ZMQ server (WebSocket-only)...")
-        
-        # Use fixed ports for consistency
-        zmq_url = "tcp://127.0.0.1:6000"
-        
-        # Start the ZMQ server as a subprocess with specific URL
-        server_proc, zmq_url, web_url = zmqserver.start_zmq_server_as_subprocess(zmq_url=zmq_url)
-        
-        print(f"ZMQ server running on: {zmq_url}")
-        print(f"WebSocket server running on: {web_url}")
-        print(f"Frontend should connect to WebSocket URL: ws://{web_url.split('://')[1]}")
-        print("Frontend can connect to this WebSocket URL")
-        
-        # Create MeshCat visualizer that connects to our server
-        viewer = meshcat.Visualizer(zmq_url=zmq_url)
-        
-        # Load the robot with mesh folder path
-        print("Loading robot with RoboMeshCat...")
-        robot = Robot(
-            urdf_path=str(urdf_path),
-            mesh_folder_path=str(mesh_folder)
-        )
-        
-        print(f"Robot loaded successfully!")
-        print(f"Number of links: {len(robot._model.frames)}")
-        print(f"Number of joints: {len(robot._model.joints)}")
-        print(f"Number of geometry objects: {len(robot._geom_model.geometryObjects)}")
-        
-        # Add robot objects directly to the viewer
-        print("Adding robot objects to MeshCat...")
-        for obj_name, obj in robot._objects.items():
-            obj._set_vis(viewer)
-            obj._set_object()
-            print(f"  Added object: {obj_name}")
-        
-        print("Robot objects added to MeshCat!")
-        print("WebSocket server is running. Frontend can connect to view the robot.")
-        print("Press Ctrl+C to exit.")
-        
-        # Keep the server running
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\nShutting down...")
-            server_proc.terminate()
-            server_proc.wait()
-            
-    except Exception as e:
-        print(f"Error loading or displaying robot: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+# Set ROS_PACKAGE_PATH for Pinocchio to resolve package:// URLs (otherwise can't load URDF successfully)
+os.environ["ROS_PACKAGE_PATH"] = str(WORKSPACE / "assets/urdf")
 
-if __name__ == "__main__":
-    main()
+# 1. Start bridge WITHOUT static routes
+class WSOnly(zmqserver.ZMQWebSocketBridge):
+    def make_app(self):
+        return tornado.web.Application([
+            (r"/ws", zmqserver.WebSocketHandler, {"bridge": self}),
+        ])
+
+bridge = WSOnly(zmq_url="tcp://127.0.0.1:6000", host="0.0.0.0", port=7000)
+print("WebSocket ready at ws://localhost:7000/ws  (no HTML served)")
+
+# 2. Load robot with MeshCat visualizer connected to same ZMQ
+import meshcat
+vis = meshcat.Visualizer(zmq_url="tcp://127.0.0.1:6000")
+robot = Robot(
+    urdf_path=str(URDF),
+    mesh_folder_path=str(MESHFOLD)
+)
+robot.viz = vis
+print("Robot loaded, %d joints" % len(robot.joint_names))
+
+# 3. Block forever
+try:
+    bridge.run()
+except KeyboardInterrupt:
+    print("\nGood-bye")
