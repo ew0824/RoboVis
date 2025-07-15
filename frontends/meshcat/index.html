@@ -13,8 +13,8 @@
             var viewer = new MeshCat.Viewer(document.getElementById("meshcat-pane"));
             try {
                 // Connect to WebSocket-only backend on port 7000
-                viewer.connect("ws://127.0.0.1:7000/ws");                
-                console.log("Connected to WebSocket-only MeshCat server on port 7000");
+                viewer.connect("ws://127.0.0.1:7001/ws");                
+                console.log("Connected to WebSocket-only MeshCat server on port 7001");
             } catch (e) {
                 console.error("Failed to connect to MeshCat websocket server: ", e);
                 console.info("Make sure the backend is running: python backends/meshcat_backend.py");
