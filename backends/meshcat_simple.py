@@ -17,7 +17,7 @@ from pathlib import Path
 from robomeshcat import Scene, Robot
 
 # Paths
-root = Path(__file__).parent.parent
+root = Path(__file__).parent.parent.parent
 urdf = root / "assets/urdf/eoat_7/urdf/eoat/eoat.urdf"
 meshes = root / "assets/urdf/eoat_7/meshes"
 
