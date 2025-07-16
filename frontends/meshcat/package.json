@@ -9,7 +9,14 @@
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4",
     "webpack-license-plugin": "^4.4.2",
-    "webpack-dev-server": "^5.0.0"
+    "webpack-dev-server": "^5.0.0",
+    "jest": "^29.0.0",
+    "puppeteer": "^21.0.0",
+    "@types/jest": "^29.0.0",
+    "ws": "^8.0.0",
+    "@babel/core": "^7.22.0",
+    "@babel/preset-env": "^7.22.0",
+    "babel-loader": "^9.1.0"
   },
   "dependencies": {
     "@msgpack/msgpack": "^2.8.0",
@@ -22,10 +29,14 @@
   },
   "scripts": {
     "build": "webpack",
-    "start": "webpack serve --mode development --port 3000",
+    "start": "webpack serve --mode development --port 7000",
     "dev": "webpack serve --mode development --port 3000",
+    "dev:proxy": "webpack serve --mode development --config webpack.config.proxy.js",
     "start:port7000": "webpack serve --mode development --config webpack.config.port7000.js",
-    "dev:port7000": "webpack serve --mode development --config webpack.config.port7000.js"
+    "dev:port7000": "webpack serve --mode development --config webpack.config.port7000.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:integration": "jest --testPathPattern=integration"
   },
   "resolutions": {
     "three": "^0.176.0"

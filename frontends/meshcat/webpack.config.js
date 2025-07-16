@@ -19,7 +19,15 @@ module.exports = [{
         compress: true,
         port: 3000,
         hot: true,
-        open: true
+        open: true,
+        proxy: {
+            '/ws': {
+                target: 'ws://127.0.0.1:7000',
+                ws: true,
+                changeOrigin: true,
+                logLevel: 'debug'
+            }
+        }
     }
 }, {
     entry: './src/index.js',
