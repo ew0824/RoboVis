@@ -32,6 +32,9 @@ module.exports = {
         ws: true,
         changeOrigin: true,
         logLevel: 'debug',
+        pathRewrite: {
+          '^/ws': '' // Remove /ws prefix when forwarding to meshcat-server
+        }
       }
     ],
   },
