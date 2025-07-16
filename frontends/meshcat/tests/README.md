@@ -55,6 +55,16 @@ When running `npm run dev:proxy`, the frontend cannot connect to the meshcat bac
 **Success Criteria**: Errors are reproduced and root cause identified
 **Failure Analysis**: Confirms error triggers and conditions
 
+### Layer 6: Live Proxy Tests (`live-proxy.test.js`) ⚠️ **CRITICAL**
+**Purpose**: Test against actual running webpack dev server with proxy (reproduces real failing scenario)
+- Starts actual webpack dev server with proxy configuration
+- Tests browser-like WebSocket connection patterns
+- Reproduces ERR_STREAM_WRITE_AFTER_END in live environment
+- Tests concurrent connections and proxy forwarding under load
+
+**Success Criteria**: Successfully reproduces the actual error you experience with `npm run dev:proxy`
+**Failure Analysis**: Identifies exact conditions that trigger ERR_STREAM_WRITE_AFTER_END in live proxy
+
 ## Test Execution Strategy
 
 1. **Run Infrastructure Tests First** - Verify all components are operational
@@ -110,3 +120,7 @@ npm test -- --testPathPattern="protocol"
 npm test -- --testPathPattern="proxy"
 npm test -- --testPathPattern="integration"
 npm test -- --testPathPattern="error-reproduction"
+npm test -- --testPathPattern="live-proxy"
+
+# ⚠️ Run ONLY the critical live proxy test (reproduces your exact error)
+npm test -- --testPathPattern="live-proxy"

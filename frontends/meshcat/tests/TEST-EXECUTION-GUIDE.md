@@ -119,10 +119,44 @@ npm test -- --testPathPattern="error-reproduction"
 
 ---
 
+### Step 6: Live Proxy Tests ⚠️ **CRITICAL**
+```bash
+npm test -- --testPathPattern="live-proxy"
+```
+
+**What This Tests**: Tests against actual running webpack dev server with proxy (the real failing scenario)
+
+**⚠️ IMPORTANT**: This test **starts a real webpack dev server** and may reproduce the actual error you're experiencing
+
+**If This Succeeds** (reproduces the real error):
+- 🎯 **Real ERR_STREAM_WRITE_AFTER_END reproduced**: Confirms the actual problem
+- 🎯 **Browser connection patterns identified**: Shows how frontend actually fails
+- 🎯 **Proxy forwarding issues detected**: Pinpoints exact failure mode
+
+**Expected Output**:
+- Live webpack dev server starts successfully
+- Multiple connection attempts are made
+- **ERR_STREAM_WRITE_AFTER_END error is reproduced** in server logs
+- Specific failure patterns are identified
+
+**If This Fails to Start**:
+- Port 3000 may be in use - kill existing processes
+- Webpack configuration issues
+- Node.js environment problems
+
+---
+
 ## Run All Diagnostic Tests
 ```bash
 npm test
 ```
+
+## ⚠️ Run ONLY the Critical Live Proxy Test
+```bash
+npm test -- --testPathPattern="live-proxy"
+```
+
+**This is the most important test** - it reproduces your exact failing scenario!
 
 ## Interpreting Test Results
 

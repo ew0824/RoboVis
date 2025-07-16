@@ -9,7 +9,7 @@ describe('Proxy Diagnostic Tests', () => {
        * FAILURE: Config missing or invalid - webpack proxy not configured
        * NEXT STEPS: Fix webpack proxy configuration
        */
-      const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+      const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
       
       let config;
       try {
@@ -62,7 +62,7 @@ describe('Proxy Diagnostic Tests', () => {
        * FAILURE: Invalid settings - proxy will fail
        * NEXT STEPS: Fix proxy target URL and WebSocket settings
        */
-      const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+      const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
       const config = require(webpackConfigPath);
       
       const wsProxy = config.devServer.proxy.find(p => 
@@ -118,7 +118,7 @@ describe('Proxy Diagnostic Tests', () => {
        * FAILURE: Context patterns wrong - proxy won't intercept
        * NEXT STEPS: Fix context patterns to match frontend requests
        */
-      const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+      const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
       const config = require(webpackConfigPath);
       
       const wsProxy = config.devServer.proxy.find(p => 
@@ -171,7 +171,7 @@ describe('Proxy Diagnostic Tests', () => {
        * FAILURE: Target unreachable - proxy will fail
        * NEXT STEPS: Start target server or fix target URL
        */
-      const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+      const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
       const config = require(webpackConfigPath);
       
       const wsProxy = config.devServer.proxy.find(p => 
@@ -224,7 +224,7 @@ describe('Proxy Diagnostic Tests', () => {
        * FAILURE: WebSocket connection fails - target server configuration issue
        * NEXT STEPS: Fix target server WebSocket configuration
        */
-      const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+      const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
       const config = require(webpackConfigPath);
       
       const wsProxy = config.devServer.proxy.find(p => 
@@ -298,7 +298,7 @@ describe('Proxy Diagnostic Tests', () => {
        * FAILURE: Path rewriting incorrect - requests will be misrouted
        * NEXT STEPS: Fix path rewriting rules
        */
-      const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+      const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
       const config = require(webpackConfigPath);
       
       const wsProxy = config.devServer.proxy.find(p => 
@@ -349,7 +349,7 @@ describe('Proxy Diagnostic Tests', () => {
        * FAILURE: Rewritten paths don't work - need different rewriting
        * NEXT STEPS: Adjust path rewriting rules
        */
-      const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+      const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
       const config = require(webpackConfigPath);
       
       const wsProxy = config.devServer.proxy.find(p => 

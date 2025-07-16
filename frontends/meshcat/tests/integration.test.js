@@ -51,7 +51,7 @@ describe('Integration Diagnostic Tests', () => {
       function testProxySimulation() {
         // Step 3: Test what proxy should do (with path rewriting if configured)
         const path = require('path');
-        const webpackConfigPath = path.resolve(__dirname, '../../webpack.config.proxy.js');
+        const webpackConfigPath = path.resolve(__dirname, '../webpack.config.proxy.js');
         
         let config;
         try {

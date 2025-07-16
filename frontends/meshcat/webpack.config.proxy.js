@@ -8,23 +8,58 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
     clean: true,
   },
+  // devServer: {
+  //   allowedHosts: 'all',
+  //   static: [
+  //     {
+  //       directory: path.join(__dirname, 'dist'),
+  //     },
+  //     {
+  //       directory: __dirname,
+  //       publicPath: '/',
+  //     }
+  //   ],
+  //   port: 3000,
+  //   host: 'localhost',
+  //   hot: true,
+  //   historyApiFallback: {
+  //     index: '/index.html'
+  //   },
+  //   // WebSocket proxy configuration
+  //   proxy: [
+  //     {
+  //       context: ['/ws'],
+  //       target: 'http://127.0.0.1:7000',  // Try HTTP target instead of WS
+  //       ws: true,
+  //       changeOrigin: true,
+  //       logLevel: 'debug',
+  //       secure: false,
+  //       pathRewrite: {
+  //         '^/ws': '' // Remove /ws prefix when forwarding to meshcat-server
+  //       },
+  //       // Try headers in different ways
+  //       headers: {
+  //         'host': '127.0.0.1:7000',
+  //         'origin': 'http://127.0.0.1:7000',
+  //         'connection': 'upgrade',
+  //         'upgrade': 'websocket'
+  //       },
+  //       onProxyReqWs: (proxyReq, req, socket, options, head) => {
+  //         // Remove problematic headers and set clean ones
+  //         proxyReq.removeHeader('origin');
+  //         proxyReq.removeHeader('host');
+  //         proxyReq.setHeader('Host', '127.0.0.1:7000');
+  //         proxyReq.setHeader('Origin', 'http://127.0.0.1:7000');
+  //         proxyReq.setHeader('Sec-WebSocket-Version', '13');
+  //       }
+  //     }
+  //   ],
+  // },
   devServer: {
-    static: [
-      {
-        directory: path.join(__dirname, 'dist'),
-      },
-      {
-        directory: __dirname,
-        publicPath: '/',
-      }
-    ],
+    static: path.join(__dirname, './'),
     port: 3000,
-    host: 'localhost',
     hot: true,
-    historyApiFallback: {
-      index: '/index.html'
-    },
-    // WebSocket proxy configuration
+    allowedHosts: 'all',        // fixes dev-server check
     proxy: [
       {
         context: ['/ws'],
@@ -32,10 +67,10 @@ module.exports = {
         ws: true,
         changeOrigin: true,
         logLevel: 'debug',
-        pathRewrite: {
-          '^/ws': '' // Remove /ws prefix when forwarding to meshcat-server
-        }
-      }
+        onProxyReqWs: (proxyReq) => {
+          proxyReq.setHeader('Origin', 'http://127.0.0.1:7000'); // fixes Tornado check
+        },
+      },
     ],
   },
   module: {
