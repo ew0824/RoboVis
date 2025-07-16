@@ -1,4 +1,6 @@
 """
+To accomodate launching on remote desktop
+
 Pure Python backend of the Viser URDF robot visualizer example.
 Launch: python backends/viser_backend.py --urdf_path assets/urdf/example.urdf
 (from root of the repo)
@@ -78,7 +80,7 @@ def main(
     ########
     server = viser.ViserServer(
         host="0.0.0.0",
-        port=8080,  # Use different port to avoid built-in frontend
+        port=8080, 
         serve_static=False, # this doesn't do anything
     )
 
