@@ -307,33 +307,73 @@ def main(
         
         with server.gui.add_folder("🔥 Stress Testing Control"):
             stress_enabled_cb = server.gui.add_checkbox("Enable Stress Testing", False)
+            stress_hz_slider = server.gui.add_slider(
+                "Frequency (Hz)",
+                min=1.0,
+                max=1000.0,
+                step=1.0,
+                initial_value=stress_hz,
+            )
+            stress_amplitude_slider = server.gui.add_slider(
+                "Amplitude (rad)",
+                min=0.1,
+                max=2.0,
+                step=0.1,
+                initial_value=stress_amplitude,
+            )
             stress_info = server.gui.add_text("Status", "Disabled")
         
         stress_task = None
         stress_thread = None
         stress_running = threading.Event()
         
+        # Shared variables for dynamic control
+        current_stress_hz = stress_hz
+        current_stress_amplitude = stress_amplitude
+        
+        # Add slider callbacks for dynamic control
+        @stress_hz_slider.on_update
+        def _(_):
+            nonlocal current_stress_hz
+            current_stress_hz = stress_hz_slider.value
+            if stress_thread is not None:
+                stress_info.value = f"🔥 ACTIVE - {current_stress_hz:.1f}Hz, {nq} joints"
+                print(f"🎛️ [STRESS] Frequency updated to {current_stress_hz:.1f}Hz")
+                
+        @stress_amplitude_slider.on_update
+        def _(_):
+            nonlocal current_stress_amplitude
+            current_stress_amplitude = stress_amplitude_slider.value
+            if stress_thread is not None:
+                stress_info.value = f"🔥 ACTIVE - {current_stress_hz:.1f}Hz, {nq} joints, ±{current_stress_amplitude:.2f}rad"
+                print(f"🎛️ [STRESS] Amplitude updated to ±{current_stress_amplitude:.2f}rad")
+        
         def run_stress_testing_in_thread():
-            """Run stress testing loop in a separate thread to avoid asyncio issues."""
+            """Run stress testing loop with dynamic parameter control."""
             print(f"🚀 [STRESS] Starting high-frequency joint driver:")
             print(f"   Joints: {nq}")
-            print(f"   Frequency: {stress_hz:.1f} Hz")
-            print(f"   Amplitude: ±{stress_amplitude:.2f} rad")
+            print(f"   Initial Frequency: {current_stress_hz:.1f} Hz")
+            print(f"   Initial Amplitude: ±{current_stress_amplitude:.2f} rad")
             print(f"   Wave frequency: {stress_wave_freq:.2f} Hz")
+            print(f"   Note: Frequency and amplitude can be adjusted via GUI sliders")
             print()
             
-            period = 1.0 / stress_hz
             phases = np.linspace(0, 2*np.pi, nq, endpoint=False)
             t0 = time.perf_counter()
             msg_count = 0
             last_stats = t0
+            last_hz_update = t0
             
             while stress_running.is_set():
                 loop_start = time.perf_counter()
                 
-                # Generate sinusoidal joint motion
+                # Get current dynamic parameters
+                hz = current_stress_hz
+                amplitude = current_stress_amplitude
+                
+                # Generate sinusoidal joint motion with current parameters
                 t = loop_start - t0
-                q = stress_amplitude * np.sin(2*np.pi*stress_wave_freq*t + phases)
+                q = amplitude * np.sin(2*np.pi*stress_wave_freq*t + phases)
                 
                 # Update robot and publish telemetry
                 viser_urdf.update_cfg(q.astype(np.float32))
@@ -344,10 +384,11 @@ def main(
                 if loop_start - last_stats >= 10.0:
                     elapsed = loop_start - t0
                     avg_hz = msg_count / elapsed if elapsed > 0 else 0
-                    print(f"🔥 [STRESS] {msg_count:,} updates | {elapsed:.1f}s | {avg_hz:.1f} Hz avg | Target: {stress_hz:.1f} Hz")
+                    print(f"🔥 [STRESS] {msg_count:,} updates | {elapsed:.1f}s | {avg_hz:.1f} Hz avg | Target: {hz:.1f} Hz | Amp: ±{amplitude:.2f}rad")
                     last_stats = loop_start
                 
-                # Sleep to maintain frequency
+                # Calculate sleep time based on current frequency
+                period = 1.0 / hz if hz > 0 else 1.0
                 loop_end = time.perf_counter()
                 sleep_time = period - (loop_end - loop_start)
                 if sleep_time > 0:
@@ -363,8 +404,8 @@ def main(
                 stress_running.set()
                 stress_thread = threading.Thread(target=run_stress_testing_in_thread, daemon=True)
                 stress_thread.start()
-                stress_info.value = f"🔥 ACTIVE - {stress_hz:.1f}Hz, {nq} joints"
-                print(f"🚀 [STRESS] Started stress testing thread: {stress_hz:.1f}Hz, {nq} joints")
+                stress_info.value = f"🔥 ACTIVE - {current_stress_hz:.1f}Hz, {nq} joints"
+                print(f"🚀 [STRESS] Started stress testing thread: {current_stress_hz:.1f}Hz, {nq} joints")
                 
             elif not stress_enabled_cb.value and stress_thread is not None:
                 # Stop stress testing loop
@@ -375,6 +416,7 @@ def main(
         
         print(f"[STRESS] Stress testing mode available - use GUI checkbox to enable")
         print(f"[STRESS] Config: {stress_hz:.1f}Hz, {nq} joints, ±{stress_amplitude:.2f}rad")
+        print(f"[STRESS] Note: Frequency and amplitude can be adjusted in real-time via GUI sliders")
     
     print(f"[TELEMETRY] Backend started with telemetry logging enabled")
     
