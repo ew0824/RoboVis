@@ -41,7 +41,25 @@ export function TelemetryOverlay() {
     // Connect to telemetry WebSocket server
     const connectWebSocket = () => {
       try {
-        const ws = new WebSocket('ws://localhost:8081');
+        // Extract hostname from the websocket URL parameter
+        const searchParams = new URLSearchParams(window.location.search);
+        const websocketUrl = searchParams.get('websocket');
+        let hostname = 'localhost'; // fallback
+        
+        if (websocketUrl) {
+          try {
+            const wsUrl = new URL(websocketUrl);
+            hostname = wsUrl.hostname;
+          } catch (e) {
+            console.warn('[TELEMETRY] Failed to parse websocket URL, using localhost');
+          }
+        }
+        
+        const telemetryUrl = `ws://${hostname}:8081`;
+        console.log(`[TELEMETRY] Extracted hostname: ${hostname}`);
+        console.log(`[TELEMETRY] Connecting to ${telemetryUrl}`);
+
+        const ws = new WebSocket(telemetryUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {

@@ -65,8 +65,8 @@ def start_telemetry_server():
         asyncio.set_event_loop(loop)
         
         async def server_main():
-            print("[TELEMETRY] Starting WebSocket server on ws://localhost:8081")
-            async with websockets.serve(handle_telemetry_client, "localhost", 8081):
+            print("[TELEMETRY] Starting WebSocket server on ws://0.0.0.0:8081")
+            async with websockets.serve(handle_telemetry_client, "0.0.0.0", 8081):
                 print("[TELEMETRY] WebSocket server ready for connections")
                 # Keep server running
                 await asyncio.Future()  # Run forever
