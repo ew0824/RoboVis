@@ -46,6 +46,7 @@ import { BrowserWarning } from "./BrowserWarning";
 import { MacWindowWrapper } from "./MacWindowWrapper";
 import { CsmDirectionalLight } from "./CsmDirectionalLight";
 import { VISER_VERSION, GITHUB_CONTRIBUTORS, Contributor } from "./VersionInfo";
+import { TelemetryOverlay } from "./TelemetryOverlay";
 
 // ======= Utility functions =======
 
@@ -167,6 +168,7 @@ function ViewerRoot() {
   const darkMode = searchParams.get("darkMode") !== null;
   const showStats = searchParams.get("showStats") !== null;
   const hideViserLogo = searchParams.get("hideViserLogo") !== null;
+  const showTelemetry = searchParams.get("telemetry") !== null;
 
   // Create a message source string.
   const messageSource = playbackPath === null ? "websocket" : "file_playback";
@@ -229,7 +231,7 @@ function ViewerRoot() {
 
   return (
     <ViewerContext.Provider value={viewer}>
-      <ViewerContents hideViserLogo={hideViserLogo}>
+      <ViewerContents hideViserLogo={hideViserLogo} showTelemetry={showTelemetry}>
         {messageSource === "websocket" && <WebsocketMessageProducer />}
         {messageSource === "file_playback" && (
           <PlaybackFromFile fileUrl={playbackPath!} />
@@ -246,9 +248,11 @@ function ViewerRoot() {
 function ViewerContents({
   children,
   hideViserLogo,
+  showTelemetry,
 }: {
   children: React.ReactNode;
   hideViserLogo: boolean;
+  showTelemetry: boolean;
 }) {
   const viewer = React.useContext(ViewerContext)!;
   const darkMode = viewer.useGui((state) => state.theme.dark_mode);
@@ -323,6 +327,9 @@ function ViewerContents({
               </ViewerCanvas>
               {showLogo && !hideViserLogo && messageSource === "websocket" && (
                 <ViserLogo />
+              )}
+              {showTelemetry && messageSource === "websocket" && (
+                <TelemetryOverlay />
               )}
             </Box>
             {messageSource === "websocket" && (
