@@ -8,7 +8,10 @@ This version adds telemetry logging to measure performance characteristics.
 from __future__ import annotations
 
 import time
-from typing import Literal, Optional
+import asyncio
+import threading
+import websockets
+from typing import Literal, Optional, Set
 import msgpack  # For telemetry message encoding
 
 import numpy as np
@@ -19,15 +22,108 @@ from yourdfpy import URDF
 import viser
 from viser.extras import ViserUrdf
 
-# Global telemetry counter
+DEFAULT_URDF_PATH = "assets/urdf/example.urdf"
+DEFAULT_URDF_PATH = "assets/urdf/eoat_7/urdf/eoat/eoat.urdf"
+
+# Global telemetry counter and timing
 seq_counter = 0
+last_telemetry_time = time.perf_counter()
+
+# WebSocket telemetry clients
+telemetry_clients: Set[websockets.WebSocketServerProtocol] = set()
+
+async def handle_telemetry_client(websocket):
+    """Handle new telemetry WebSocket connections."""
+    telemetry_clients.add(websocket)
+    print(f"[TELEMETRY] Client connected from {websocket.remote_address}, total clients: {len(telemetry_clients)}")
+    
+    try:
+        # Keep connection alive and handle disconnection
+        await websocket.wait_closed()
+    except websockets.exceptions.ConnectionClosed:
+        pass
+    finally:
+        telemetry_clients.discard(websocket)
+        print(f"[TELEMETRY] Client disconnected, remaining clients: {len(telemetry_clients)}")
+
+def start_telemetry_server():
+    """Start the telemetry WebSocket server in a background thread."""
+    def run_server():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        async def server_main():
+            print("[TELEMETRY] Starting WebSocket server on ws://localhost:8081")
+            async with websockets.serve(handle_telemetry_client, "localhost", 8081):
+                print("[TELEMETRY] WebSocket server ready for connections")
+                # Keep server running
+                await asyncio.Future()  # Run forever
+        
+        try:
+            loop.run_until_complete(server_main())
+        except Exception as e:
+            print(f"[TELEMETRY] WebSocket server error: {e}")
+    
+    # Start server in daemon thread
+    thread = threading.Thread(target=run_server, daemon=True)
+    thread.start()
+    time.sleep(0.1)  # Give server time to start
+
+def send_telemetry_to_clients(payload_bytes: bytes):
+    """Send telemetry data to all connected WebSocket clients."""
+    if not telemetry_clients:
+        return
+    
+    # Send to all clients, remove disconnected ones
+    disconnected = set()
+    for client in telemetry_clients.copy():
+        try:
+            # Schedule sending in a thread-safe way
+            def send_task(client_ref=client, data=payload_bytes):
+                asyncio.create_task(client_ref.send(data))
+            
+            if hasattr(client, 'loop') and client.loop:
+                client.loop.call_soon_threadsafe(send_task)
+            else:
+                # Fallback - skip this client
+                print(f"[TELEMETRY] Client has no event loop, skipping")
+                disconnected.add(client)
+        except Exception as e:
+            print(f"[TELEMETRY] Error sending to client: {e}")
+            disconnected.add(client)
+    
+    # Clean up disconnected clients
+    telemetry_clients.difference_update(disconnected)
 
 def publish_telemetry(cfg: np.ndarray) -> None:
-    """Basic telemetry logging (console only for Phase 1A)."""
-    global seq_counter
+    """Publish telemetry with performance metrics."""
+    global seq_counter, last_telemetry_time
     seq_counter += 1
+    
+    current_time = time.perf_counter()
     timestamp_ns = time.perf_counter_ns()
-    print(f"[TELEMETRY] seq={seq_counter}, ts={timestamp_ns}, nq={cfg.shape[0]}")
+    
+    # Calculate time since last telemetry event
+    dt = current_time - last_telemetry_time
+    hz = 1.0 / dt if dt > 0 else 0.0
+    last_telemetry_time = current_time
+    
+    # Create telemetry payload
+    payload = {
+        "seq": seq_counter,
+        "ns": timestamp_ns,
+        "nq": int(cfg.shape[0]),
+        "hz": round(hz, 1),
+    }
+    
+    # Encode payload for WebSocket use
+    packed = msgpack.packb(payload, use_bin_type=True)
+    
+    # Send to WebSocket clients
+    send_telemetry_to_clients(packed)
+    
+    # Log to console with rate information
+    print(f"[TELEMETRY] seq={seq_counter}, ts={timestamp_ns}, nq={cfg.shape[0]}, rate={hz:.1f}Hz, bytes={len(packed)}")
 
   
 def create_robot_control_sliders(
@@ -65,7 +161,7 @@ def create_robot_control_sliders(
 
 
 def main(
-    urdf_path: str = "assets/urdf/example.urdf",
+    urdf_path: str = DEFAULT_URDF_PATH,
     load_meshes: bool = True,
     load_collision_meshes: bool = True,
 ) -> None:
@@ -78,6 +174,12 @@ def main(
         port=8080, 
         serve_static=False, # this doesn't do anything
     )
+
+    ########
+    # 1.5. Initialize telemetry system
+    ########
+    start_telemetry_server()
+    print("[TELEMETRY] Telemetry system initialized with WebSocket server")
 
     ########
     # 2. Load URDF

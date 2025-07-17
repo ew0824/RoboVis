@@ -37,6 +37,8 @@ from yourdfpy import URDF
 import viser
 from viser.extras import ViserUrdf
 
+DEFAULT_URDF_PATH = "assets/urdf/example.urdf"
+# DEFAULT_URDF_PATH = "assets/urdf/eoat_7/urdf/eoat/eoat.urdf"
   
 def create_robot_control_sliders(
     server: viser.ViserServer, viser_urdf: ViserUrdf
@@ -70,7 +72,7 @@ def create_robot_control_sliders(
 
 
 def main(
-    urdf_path: str = "assets/urdf/example.urdf",
+    urdf_path: str = DEFAULT_URDF_PATH,
     load_meshes: bool = True,
     load_collision_meshes: bool = True,
 ) -> None:
