@@ -34,17 +34,29 @@ telemetry_clients: Set[websockets.WebSocketServerProtocol] = set()
 
 async def handle_telemetry_client(websocket):
     """Handle new telemetry WebSocket connections."""
+    connect_time = time.perf_counter()
     telemetry_clients.add(websocket)
+    # print(f"[TELEMETRY-DEBUG] Client connected from {websocket.remote_address} at {connect_time}")
     print(f"[TELEMETRY] Client connected from {websocket.remote_address}, total clients: {len(telemetry_clients)}")
     
     try:
         # Keep connection alive and handle disconnection
+        # print(f"[TELEMETRY-DEBUG] Waiting for client {websocket.remote_address} to close...")
         await websocket.wait_closed()
-    except websockets.exceptions.ConnectionClosed:
-        pass
+        disconnect_time = time.perf_counter()
+        duration = disconnect_time - connect_time
+        # print(f"[TELEMETRY-DEBUG] Client {websocket.remote_address} closed after {duration:.2f} seconds")
+    except websockets.exceptions.ConnectionClosed as e:
+        disconnect_time = time.perf_counter()
+        duration = disconnect_time - connect_time
+        # print(f"[TELEMETRY-DEBUG] Client {websocket.remote_address} connection closed exception after {duration:.2f}s: {e}")
+    except Exception as e:
+        disconnect_time = time.perf_counter()
+        duration = disconnect_time - connect_time
+        # print(f"[TELEMETRY-DEBUG] Client {websocket.remote_address} unexpected error after {duration:.2f}s: {e}")
     finally:
         telemetry_clients.discard(websocket)
-        print(f"[TELEMETRY] Client disconnected, remaining clients: {len(telemetry_clients)}")
+        # print(f"[TELEMETRY] Client disconnected, remaining clients: {len(telemetry_clients)}")
 
 def start_telemetry_server():
     """Start the telemetry WebSocket server in a background thread."""
@@ -76,6 +88,7 @@ def send_telemetry_to_clients(payload_bytes: bytes):
     
     # Send to all clients, remove disconnected ones
     disconnected = set()
+    
     for client in telemetry_clients.copy():
         try:
             # Schedule sending in a thread-safe way
@@ -86,14 +99,14 @@ def send_telemetry_to_clients(payload_bytes: bytes):
                 client.loop.call_soon_threadsafe(send_task)
             else:
                 # Fallback - skip this client
-                print(f"[TELEMETRY] Client has no event loop, skipping")
                 disconnected.add(client)
         except Exception as e:
-            print(f"[TELEMETRY] Error sending to client: {e}")
+            print(f"[TELEMETRY] Error sending to client {client.remote_address}: {e}")
             disconnected.add(client)
     
     # Clean up disconnected clients
-    telemetry_clients.difference_update(disconnected)
+    if disconnected:
+        telemetry_clients.difference_update(disconnected)
 
 def publish_telemetry(cfg: np.ndarray) -> None:
     """Publish telemetry with performance metrics."""
@@ -117,7 +130,11 @@ def publish_telemetry(cfg: np.ndarray) -> None:
     }
     
     # Encode payload for WebSocket use
-    packed = msgpack.packb(payload, use_bin_type=True)
+    try:
+        packed = msgpack.packb(payload, use_bin_type=True)
+    except Exception as e:
+        print(f"[TELEMETRY] Msgpack encoding error: {e}")
+        return
     
     # Send to WebSocket clients
     send_telemetry_to_clients(packed)

@@ -49,17 +49,29 @@ export function TelemetryOverlay() {
           setStats(prev => ({ ...prev, connected: true }));
         };
 
-        ws.onmessage = (event) => {
+        ws.onmessage = async (event) => {
           try {
+            let messageSize = 0;
+            let dataForDecode = event.data;
+            
+            if (event.data instanceof ArrayBuffer) {
+              messageSize = event.data.byteLength;
+            } else if (event.data instanceof Blob) {
+              messageSize = event.data.size;
+              // Convert Blob to ArrayBuffer for msgpack
+              dataForDecode = await event.data.arrayBuffer();
+            } else {
+              messageSize = event.data.length || 0;
+            }
+            
             // Decode msgpack data
-            const data = decode(event.data) as TelemetryData;
+            const data = decode(dataForDecode) as TelemetryData;
             const receiveTime = performance.now() * 1e6; // Convert to nanoseconds
             
             // Calculate round-trip latency
             const latency = Math.max(0, (receiveTime - data.ns) / 1e6); // Convert to milliseconds
             
             // Update bandwidth calculation
-            const messageSize = event.data.byteLength || event.data.size || 0;
             bandwidthBytesRef.current += messageSize;
             const now = Date.now();
             
