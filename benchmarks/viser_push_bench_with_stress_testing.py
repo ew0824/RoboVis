@@ -38,23 +38,46 @@ last_telemetry_time = time.perf_counter()
 telemetry_clients: Set[websockets.WebSocketServerProtocol] = set()
 
 async def handle_telemetry_client(websocket):
-    """Handle new telemetry WebSocket connections."""
+    """Handle new telemetry WebSocket connections and ping/pong for latency measurement."""
     connect_time = time.perf_counter()
     telemetry_clients.add(websocket)
     print(f"[TELEMETRY] Client connected from {websocket.remote_address}, total clients: {len(telemetry_clients)}")
     
     try:
-        await websocket.wait_closed()
-        disconnect_time = time.perf_counter()
-        duration = disconnect_time - connect_time
+        # Listen for ping messages from client for latency measurement
+        async for message in websocket:
+            try:
+                # print(f"[TELEMETRY] Received message from client: {type(message)}, length: {len(message) if hasattr(message, '__len__') else 'N/A'}") # Debug: uncomment to see all messages
+                
+                # Try to decode as msgpack ping message
+                data = msgpack.unpackb(message)
+                # print(f"[TELEMETRY] Decoded message: {data}") # Debug: uncomment to see decoded messages
+                
+                if isinstance(data, dict) and data.get("type") == "ping":
+                    # print(f"[PING] Received ping from client: {data}") # Debug: uncomment to see pings
+                    # Echo back the ping as a pong with the same client timestamp
+                    pong_response = {
+                        "type": "pong",
+                        "client_timestamp": data.get("client_timestamp"),
+                        "server_timestamp": time.perf_counter_ns()
+                    }
+                    pong_bytes = msgpack.packb(pong_response, use_bin_type=True)
+                    await websocket.send(pong_bytes)
+                    # print(f"[PONG] Sent pong response: {pong_response}") # Debug: uncomment to see pong responses
+            except Exception as e:
+                print(f"[TELEMETRY] Error processing message: {e}")
+                
     except websockets.exceptions.ConnectionClosed as e:
         disconnect_time = time.perf_counter()
         duration = disconnect_time - connect_time
+        print(f"[TELEMETRY] Client {websocket.remote_address} disconnected after {duration:.1f}s")
     except Exception as e:
         disconnect_time = time.perf_counter()
         duration = disconnect_time - connect_time
+        print(f"[TELEMETRY] Client {websocket.remote_address} error: {e}")
     finally:
         telemetry_clients.discard(websocket)
+        print(f"[TELEMETRY] Removed client, remaining: {len(telemetry_clients)}")
 
 def start_telemetry_server():
     """Start the telemetry WebSocket server in a background thread."""
@@ -305,7 +328,7 @@ def main(
     if stress:
         nq = stress_joints if stress_joints is not None else len(initial_config)
         
-        with server.gui.add_folder("🔥 Stress Testing Control"):
+        with server.gui.add_folder("Stress Testing Control"):
             stress_enabled_cb = server.gui.add_checkbox("Enable Stress Testing", False)
             stress_hz_slider = server.gui.add_slider(
                 "Frequency (Hz)",
