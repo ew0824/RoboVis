@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, Paper } from '@mantine/core';
-import { decode } from '@msgpack/msgpack';
+import { decode, encode } from '@msgpack/msgpack';
 
 interface TelemetryData {
   seq: number;
@@ -9,12 +9,19 @@ interface TelemetryData {
   hz: number;
 }
 
+interface PongData {
+  type: 'pong';
+  client_timestamp: number;
+  server_timestamp: number;
+}
+
 interface TelemetryStats {
   latency: number;
   rate: number;
   messageCount: number;
   bandwidth: number;
   connected: boolean;
+  fps: number;
 }
 
 export function TelemetryOverlay() {
@@ -24,6 +31,7 @@ export function TelemetryOverlay() {
     messageCount: 0,
     bandwidth: 0,
     connected: false,
+    fps: 0,
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -31,11 +39,35 @@ export function TelemetryOverlay() {
   const lastMessageTimeRef = useRef<number>(0);
   const bandwidthBytesRef = useRef<number>(0);
   const bandwidthWindowRef = useRef<number>(Date.now());
+  
+  // FPS tracking refs
+  const frameCountRef = useRef<number>(0);
+  const fpsStartTimeRef = useRef<number>(performance.now());
+
+  // Ping/Pong latency tracking refs
+  const lastPingTimeRef = useRef<number>(0);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update ref when stats change
   useEffect(() => {
     statsRef.current = stats;
   }, [stats]);
+
+  // Send ping message for latency measurement
+  const sendPing = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const pingMessage = {
+        type: 'ping',
+        client_timestamp: performance.now()
+      };
+      const pingBytes = encode(pingMessage);
+      wsRef.current.send(pingBytes);
+      lastPingTimeRef.current = performance.now();
+      // console.log('[PING] Sent ping message:', pingMessage); // Debug: uncomment to see pings
+    } else {
+      console.log('[PING] Cannot send ping - WebSocket not ready');
+    }
+  };
 
   useEffect(() => {
     // Connect to telemetry WebSocket server
@@ -65,6 +97,13 @@ export function TelemetryOverlay() {
         ws.onopen = () => {
           console.log('[TELEMETRY] Connected to telemetry server');
           setStats(prev => ({ ...prev, connected: true }));
+          
+          // Start ping interval for latency measurement
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+          }
+          pingIntervalRef.current = setInterval(sendPing, 1000); // Ping every second
+          sendPing(); // Send initial ping
         };
 
         ws.onmessage = async (event) => {
@@ -83,11 +122,29 @@ export function TelemetryOverlay() {
             }
             
             // Decode msgpack data
-            const data = decode(dataForDecode) as TelemetryData;
-            const receiveTime = performance.now() * 1e6; // Convert to nanoseconds
+            const data = decode(dataForDecode);
             
-            // Calculate round-trip latency
-            const latency = Math.max(0, (receiveTime - data.ns) / 1e6); // Convert to milliseconds
+            // Debug all incoming messages
+            if (Math.random() < 0.01) { // Log 1% of messages to see what we're getting
+              console.log('[MESSAGE] Received:', data);
+            }
+            
+            // Handle pong responses for latency measurement  
+            if (data && typeof data === 'object' && (data as any).type === 'pong') {
+              console.log('[PONG] Received pong response:', data);
+              const pongData = data as PongData;
+              const now = performance.now();
+              const roundTripLatency = now - pongData.client_timestamp;
+              
+              setStats(prev => ({ ...prev, latency: roundTripLatency }));
+              
+              console.log(`[LATENCY] Round-trip: ${roundTripLatency.toFixed(1)}ms`);
+              return; // Don't process as telemetry data
+            }
+            
+            // Handle regular telemetry data
+            const telemetryData = data as TelemetryData;
+            const latency = statsRef.current.latency; // Use existing latency from pong
             
             // Update bandwidth calculation
             bandwidthBytesRef.current += messageSize;
@@ -104,9 +161,10 @@ export function TelemetryOverlay() {
             }
 
             setStats(prev => ({
+              ...prev,
               latency: latency,
-              rate: data.hz,
-              messageCount: data.seq,
+              rate: telemetryData.hz,
+              messageCount: telemetryData.seq,
               bandwidth: bandwidth,
               connected: true,
             }));
@@ -120,6 +178,12 @@ export function TelemetryOverlay() {
         ws.onclose = () => {
           console.log('[TELEMETRY] Disconnected from telemetry server');
           setStats(prev => ({ ...prev, connected: false }));
+          
+          // Stop ping interval
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+            pingIntervalRef.current = null;
+          }
           
           // Attempt to reconnect after 2 seconds
           setTimeout(connectWebSocket, 2000);
@@ -142,6 +206,9 @@ export function TelemetryOverlay() {
       if (wsRef.current) {
         wsRef.current.close();
       }
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
     };
   }, []);
 
@@ -156,6 +223,37 @@ export function TelemetryOverlay() {
 
     return () => clearInterval(interval);
   }, [stats.connected]);
+
+  // FPS tracking using requestAnimationFrame
+  useEffect(() => {
+    let animationId: number;
+
+    const trackFPS = (currentTime: number) => {
+      frameCountRef.current++;
+      
+      // Calculate FPS every second
+      if (currentTime - fpsStartTimeRef.current >= 1000) {
+        const elapsedSeconds = (currentTime - fpsStartTimeRef.current) / 1000;
+        const actualFPS = frameCountRef.current / elapsedSeconds;
+        
+        setStats(prev => ({ ...prev, fps: actualFPS }));
+        
+        // Reset counters
+        frameCountRef.current = 0;
+        fpsStartTimeRef.current = currentTime;
+      }
+      
+      animationId = requestAnimationFrame(trackFPS);
+    };
+    
+    animationId = requestAnimationFrame(trackFPS);
+    
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, []);
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B/s';
@@ -195,11 +293,17 @@ export function TelemetryOverlay() {
         
         <Box style={{ display: 'flex', flexDirection: 'column', gap: '0.2em' }}>
           <Text size="xs">
-            Latency: <span style={{ color: '#FFD700' }}>{stats.latency.toFixed(1)}ms</span>
+            Latency: <span style={{ color: stats.latency > 0 ? '#FFD700' : '#888888' }}>
+              {stats.latency > 0 ? `${stats.latency.toFixed(1)}ms` : 'N/A'}
+            </span>
           </Text>
           
           <Text size="xs">
-            Rate: <span style={{ color: '#00CED1' }}>{stats.rate.toFixed(1)}Hz</span>
+            Msg Rate: <span style={{ color: '#00CED1' }}>{stats.rate.toFixed(1)}Hz</span>
+          </Text>
+          
+          <Text size="xs">
+            FPS: <span style={{ color: '#FF6B35' }}>{stats.fps.toFixed(1)}</span>
           </Text>
           
           <Text size="xs">
