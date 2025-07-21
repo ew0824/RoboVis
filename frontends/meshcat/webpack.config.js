@@ -9,7 +9,6 @@ module.exports = [{
         path: path.resolve(__dirname, 'dist'),
         filename: 'main.js'
     },
-    watch: true,
     mode: "development",
     devtool: "eval-cheap-source-map",
     devServer: {
@@ -19,40 +18,31 @@ module.exports = [{
         compress: true,
         port: 3000,
         hot: true,
-        open: true,
-        proxy: {
-            '/ws': {
-                target: 'ws://127.0.0.1:7000',
-                ws: true,
-                changeOrigin: true,
-                logLevel: 'debug'
-            }
-        }
+        open: true
     }
 }, {
-    entry: './src/index.js',
-    output: {
-        filename: "main.min.js",
-        library: "MeshCat",
-        libraryTarget: 'umd',
-        path: path.resolve(__dirname, 'dist')
-    },
-    watch: true,
+  entry: './src/index.js',
+  output: {
+    filename: "main.min.js",
+    library: "MeshCat",
+    libraryTarget: 'umd',
+    path: path.resolve(__dirname, 'dist')
+  },
     mode: "production",
-    module: {
-      rules: [
-        {
-          test: /\/libs\/(basis|draco)\//,
-          type: 'asset/inline'
-        }
-      ]
-    },
-    plugins: [
-      new LicensePlugin({
-        outputFilename: "main.min.js.THIRD_PARTY_LICENSES.json",
-        licenseOverrides: {
-          'wwobjloader2@6.2.1': 'MIT',
-        }
-      })
-    ],
+  module: {
+    rules: [
+      {
+        test: /\/libs\/(basis|draco)\//,
+        type: 'asset/inline'
+      }
+    ]
+  },
+  plugins: [
+    new LicensePlugin({
+      outputFilename: "main.min.js.THIRD_PARTY_LICENSES.json",
+      licenseOverrides: {
+        'wwobjloader2@6.2.1': 'MIT',
+      }
+    })
+  ],
 }];

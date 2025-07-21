@@ -59,7 +59,10 @@ module.exports = {
     static: path.join(__dirname, './'),
     port: 3000,
     hot: true,
-    allowedHosts: 'all',        // fixes dev-server check
+    allowedHosts: 'all',
+    historyApiFallback: {
+      index: '/proxy-test.html'
+    },
     proxy: [
       {
         context: ['/ws'],
@@ -68,7 +71,7 @@ module.exports = {
         changeOrigin: true,
         logLevel: 'debug',
         onProxyReqWs: (proxyReq) => {
-          proxyReq.setHeader('Origin', 'http://127.0.0.1:7000'); // fixes Tornado check
+          proxyReq.setHeader('Origin', 'http://127.0.0.1:7000');
         },
       },
     ],
