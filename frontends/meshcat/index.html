@@ -1,176 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MeshCat with WebSocket Proxy</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-        }
-        .success { background-color: #d4edda; color: #155724; }
-        .error { background-color: #f8d7da; color: #721c24; }
-        .info { background-color: #d1ecf1; color: #0c5460; }
-        #log {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 15px;
-            margin-top: 20px;
-            height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-            white-space: pre-wrap;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 5px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        button:disabled {
-            background-color: #6c757d;
-            cursor: not-allowed;
-        }
-    </style>
+    <meta charset="utf-8">
+    <title>MeshCat</title>
 </head>
 <body>
-    <h1>MeshCat WebSocket Proxy Test</h1>
-    
-    <div class="info status">
-        <strong>Instructions:</strong> 
-        <ol>
-            <li>Start your MeshCat backend server on port 7000</li>
-            <li>Run this frontend with proxy: <code>npm run dev:proxy</code></li>
-            <li>This page should connect to ws://localhost:3000/ws which proxies to ws://127.0.0.1:7000/ws</li>
-        </ol>
+    <div id="meshcat-pane">
     </div>
 
-    <div id="status" class="info status">
-        Initializing WebSocket connection...
-    </div>
-
-    <div>
-        <button id="connectBtn" onclick="connect()">Connect</button>
-        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
-        <button id="sendTestBtn" onclick="sendTestMessage()" disabled>Send Test Message</button>
-        <button id="clearLogBtn" onclick="clearLog()">Clear Log</button>
-    </div>
-
-    <div id="log"></div>
-
-    <script src="bundle.js"></script>
+    <script src="dist/main.js"></script>
     <script>
-        let ws = null;
-        const logElement = document.getElementById('log');
-        const statusElement = document.getElementById('status');
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        const sendTestBtn = document.getElementById('sendTestBtn');
-
-        function log(message) {
-            const timestamp = new Date().toLocaleTimeString();
-            logElement.textContent += `[${timestamp}] ${message}\n`;
-            logElement.scrollTop = logElement.scrollHeight;
+        var viewer = new MeshCat.Viewer(document.getElementById("meshcat-pane"));
+        try {
+            viewer.connect();
+        } catch (e) {
+            console.info("Not connected to MeshCat websocket server: ", e);
         }
-
-        function updateStatus(message, type = 'info') {
-            statusElement.textContent = message;
-            statusElement.className = `status ${type}`;
-        }
-
-        function updateButtons(connected) {
-            connectBtn.disabled = connected;
-            disconnectBtn.disabled = !connected;
-            sendTestBtn.disabled = !connected;
-        }
-
-        function connect() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                log('Already connected');
-                return;
-            }
-
-            // Generate WebSocket URL using our connection utils
-            const wsUrl = `ws://${window.location.host}/ws`;
-            log(`Attempting to connect to: ${wsUrl}`);
-            updateStatus('Connecting...', 'info');
-
-            try {
-                ws = new WebSocket(wsUrl);
-                
-                ws.onopen = function(event) {
-                    log('WebSocket connection opened successfully');
-                    updateStatus('Connected via proxy', 'success');
-                    updateButtons(true);
-                };
-                
-                ws.onmessage = function(event) {
-                    log(`Received message: ${event.data}`);
-                };
-                
-                ws.onerror = function(error) {
-                    log(`WebSocket error: ${error}`);
-                    updateStatus('Connection error', 'error');
-                    updateButtons(false);
-                };
-                
-                ws.onclose = function(event) {
-                    log(`WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason}`);
-                    updateStatus('Disconnected', 'info');
-                    updateButtons(false);
-                };
-            } catch (error) {
-                log(`Failed to create WebSocket: ${error.message}`);
-                updateStatus('Connection failed', 'error');
-                updateButtons(false);
-            }
-        }
-
-        function disconnect() {
-            if (ws) {
-                ws.close();
-                ws = null;
-            }
-        }
-
-        function sendTestMessage() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const testMessage = {
-                    type: 'test',
-                    timestamp: Date.now(),
-                    message: 'Hello from proxy test'
-                };
-                ws.send(JSON.stringify(testMessage));
-                log(`Sent test message: ${JSON.stringify(testMessage)}`);
-            } else {
-                log('Cannot send message: WebSocket not connected');
-            }
-        }
-
-        function clearLog() {
-            logElement.textContent = '';
-        }
-
-        // Auto-connect on page load
-        window.addEventListener('load', function() {
-            log('Page loaded, attempting auto-connect...');
-            setTimeout(connect, 1000);
-        });
     </script>
+
+    <style>
+        body {
+            margin: 0;
+        }
+
+        #meshcat-pane {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+    </style>
+    <script id="embedded-json"></script>
 </body>
 </html>
