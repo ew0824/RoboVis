@@ -56,7 +56,10 @@ module.exports = {
   //   ],
   // },
   devServer: {
-    static: path.join(__dirname, './'),
+    static: {
+      directory: path.join(__dirname, './'),
+      index: 'proxy-test.html'
+    },
     port: 3000,
     hot: true,
     allowedHosts: 'all',

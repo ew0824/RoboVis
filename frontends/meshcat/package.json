@@ -31,9 +31,7 @@
     "build": "webpack",
     "start": "webpack serve --mode development --port 7000",
     "dev": "webpack serve --mode development --port 3000",
-    "dev:proxy": "webpack serve --mode development --config webpack.config.proxy.js",
-    "start:port7000": "webpack serve --mode development --config webpack.config.port7000.js",
-    "dev:port7000": "webpack serve --mode development --config webpack.config.port7000.js",
+    "dev:proxy": "webpack serve --mode development --config webpack.config.proxy.js --open proxy-test.html",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:integration": "jest --testPathPattern=integration"
