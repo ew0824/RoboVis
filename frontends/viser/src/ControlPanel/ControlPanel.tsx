@@ -62,11 +62,11 @@ export default function ControlPanel(props: {
   );
   const controlWidth = (
     controlWidthString == "small"
-      ? "16em"
+      ? "28em"
       : controlWidthString == "medium"
-        ? "20em"
+        ? "32em"
         : controlWidthString == "large"
-          ? "24em"
+          ? "36em"
           : null
   )!;
 
@@ -122,21 +122,7 @@ export default function ControlPanel(props: {
         <BottomPanel.Contents>{panelContents}</BottomPanel.Contents>
       </BottomPanel>
     );
-  } else if (props.control_layout === "floating") {
-    /* Floating layout. */
-    return (
-      <FloatingPanel width={controlWidth}>
-        <FloatingPanel.Handle>
-          <ConnectionStatus />
-          <FloatingPanel.HideWhenCollapsed>
-            <ShareButton />
-            {generatedServerToggleButton}
-          </FloatingPanel.HideWhenCollapsed>
-        </FloatingPanel.Handle>
-        <FloatingPanel.Contents>{panelContents}</FloatingPanel.Contents>
-      </FloatingPanel>
-    );
-  } else {
+  } else if (props.control_layout === "fixed" || props.control_layout === "collapsible") {
     /* Sidebar view. */
     return (
       <SidebarPanel
@@ -150,6 +136,20 @@ export default function ControlPanel(props: {
         </SidebarPanel.Handle>
         <SidebarPanel.Contents>{panelContents}</SidebarPanel.Contents>
       </SidebarPanel>
+    );
+  } else {
+    /* Floating layout (DEFAULT - draggable). */
+    return (
+      <FloatingPanel width={controlWidth}>
+        <FloatingPanel.Handle>
+          <ConnectionStatus />
+          <FloatingPanel.HideWhenCollapsed>
+            <ShareButton />
+            {generatedServerToggleButton}
+          </FloatingPanel.HideWhenCollapsed>
+        </FloatingPanel.Handle>
+        <FloatingPanel.Contents>{panelContents}</FloatingPanel.Contents>
+      </FloatingPanel>
     );
   }
 }

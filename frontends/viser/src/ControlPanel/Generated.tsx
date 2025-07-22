@@ -1,6 +1,7 @@
 import { ViewerContext } from "../ViewerContext";
 import { useThrottledMessageSender } from "../WebsocketUtils";
 import { GuiComponentContext } from "./GuiComponentContext";
+import SceneTreeMainGui from "./SceneTreeMainGui";
 
 import { Box } from "@mantine/core";
 import React from "react";
@@ -80,6 +81,12 @@ function GuiContainer({ containerUuid }: { containerUuid: string }) {
   );
   const out = (
     <Box pt="xs">
+      {/* Only add Scene Tree to the root container */}
+      {containerUuid === "root" && (
+        <Box mb="md">
+          <SceneTreeMainGui />
+        </Box>
+      )}
       {guiUuidOrderPairArray.map((pair, index) => (
         <GeneratedInput
           key={pair.uuid}

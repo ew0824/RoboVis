@@ -1,9 +1,9 @@
 """
-Enhanced Multi-URDF Viser system with individual coordinate frame controls.
-Each joint and link gets its own coordinate frame toggle button in the GUI.
+Simplified Multi-URDF Viser system using built-in coordinate frames.
+Uses standard viser.extras.ViserUrdf + simple frame helpers + enhanced scene tree.
 
 Launch:
-    python backends/viser/viser_multi_urdf_with_frames.py --workcell workcell_alpha_2 --stress --stress-hz 200
+    python backends/viser/viser_multi_urdf_simplified.py --workcell workcell_alpha_2 --stress --stress-hz 200
 """
 
 from __future__ import annotations
@@ -21,14 +21,10 @@ from pathlib import Path
 import numpy as np
 import tyro
 from yourdfpy import URDF
+from scipy.spatial.transform import Rotation
 
 import viser
-
-# Import our extended ViserUrdf class
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from viser_urdf_extended import ViserUrdfExtended
+from viser.extras import ViserUrdf
 
 # Global telemetry counter and timing
 seq_counter = 0
@@ -95,18 +91,89 @@ class PackagePathResolver:
             return None
 
 
+def add_urdf_coordinate_frames(server: viser.ViserServer, urdf: URDF, urdf_name: str, scale: float = 1.0) -> Dict[str, viser.FrameHandle]:
+    """Add coordinate frames for all joints in a URDF using Viser's built-in frame system."""
+    frames = {}
+    
+    print(f"[FRAMES] Adding coordinate frames for {urdf_name}")
+    
+    for joint in urdf.robot.joints:
+        # Create frame name that will appear nicely in scene tree
+        frame_name = f"/{urdf_name}/frames/{joint.name}"
+        
+        try:
+            # Get initial transform for this joint
+            T_parent_child = urdf.get_transform(joint.child, joint.parent)
+            position = T_parent_child[:3, 3] * scale
+            rotation_matrix = T_parent_child[:3, :3]
+            
+            # Convert rotation matrix to quaternion (w, x, y, z)
+            r = Rotation.from_matrix(rotation_matrix)
+            quat_xyzw = r.as_quat()  # Returns [x, y, z, w]
+            quat_wxyz = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])  # Convert to [w, x, y, z]
+            
+            # Create coordinate frame using Viser's built-in system
+            frame = server.scene.add_frame(
+                frame_name,
+                show_axes=False,  # Start hidden, user can toggle in scene tree
+                axes_length=0.1,
+                axes_radius=0.005,
+                position=tuple(position),
+                wxyz=tuple(quat_wxyz),
+            )
+            
+            frames[joint.name] = frame
+            
+        except Exception as e:
+            print(f"[FRAMES] Warning: Could not create frame for joint {joint.name}: {e}")
+    
+    print(f"[FRAMES] Created {len(frames)} coordinate frames for {urdf_name}")
+    return frames
+
+
+def update_urdf_coordinate_frames(urdf: URDF, frames: Dict[str, viser.FrameHandle], scale: float = 1.0) -> None:
+    """Update coordinate frame positions based on current joint configuration."""
+    for joint_name, frame in frames.items():
+        try:
+            # Find the joint
+            joint = None
+            for j in urdf.robot.joints:
+                if j.name == joint_name:
+                    joint = j
+                    break
+            
+            if joint is None:
+                continue
+                
+            # Get current transform for this joint
+            T_parent_child = urdf.get_transform(joint.child, joint.parent)
+            position = T_parent_child[:3, 3] * scale
+            rotation_matrix = T_parent_child[:3, :3]
+            
+            # Convert rotation matrix to quaternion (w, x, y, z)
+            r = Rotation.from_matrix(rotation_matrix)
+            quat_xyzw = r.as_quat()  # Returns [x, y, z, w]
+            quat_wxyz = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])  # Convert to [w, x, y, z]
+            
+            # Update frame pose
+            frame.position = tuple(position)
+            frame.wxyz = tuple(quat_wxyz)
+            
+        except Exception as e:
+            print(f"[FRAMES] Warning: Could not update frame for joint {joint_name}: {e}")
+
+
 class SmartUrdfManager:
-    """Enhanced URDF manager with individual coordinate frame controls."""
+    """Simplified URDF manager using built-in Viser coordinate frames."""
     
     def __init__(self, server: viser.ViserServer):
         self.server = server
         self.path_resolver = PackagePathResolver()
-        self.viser_urdfs: List[ViserUrdfExtended] = []
+        self.viser_urdfs: List[ViserUrdf] = []
         self.urdf_configs: List[Dict] = []
+        self.coordinate_frames: Dict[str, Dict[str, viser.FrameHandle]] = {}  # urdf_name -> {joint_name -> frame}
         self.filtered_joint_limits: Dict[str, Tuple[float, float]] = {}
         self.filtered_joint_names: List[str] = []
-        
-        # Note: Individual coordinate frame management is now handled by ViserUrdfExtended
         
     def _patch_urdf_mesh_paths(self, urdf_content: str) -> str:
         """Replace package:// URIs with resolved file paths in URDF content."""
@@ -152,7 +219,7 @@ class SmartUrdfManager:
         return True
         
     def _get_short_joint_name(self, full_joint_name: str) -> str:
-        """Create a shorter, more readable joint name."""
+        """Create a shorter, more readable joint name (lowercase to match scene tree)."""
         # Remove common prefixes
         name = full_joint_name
         prefixes_to_remove = [
@@ -164,80 +231,31 @@ class SmartUrdfManager:
                 name = name[len(prefix):]
                 break
                 
-        # Replace underscores with spaces and title case
-        name = name.replace("_", " ").title()
+        # Replace underscores with spaces but keep lowercase
+        name = name.replace("_", " ")
         
-        # Shorten common terms
+        # # Fix stage naming: ystage → y_stage, zstage → z_stage, etc.
+        # name = name.replace("ystage", "y_stage")
+        # name = name.replace("zstage", "z_stage") 
+        # name = name.replace("xstage", "x_stage")
+        
+        # Shorten common terms (keeping lowercase)
         replacements = {
-            "To": "→",
-            "Base To": "",
-            "Stage": "Stage",
-            "Arm 1": "Arm1",
-            "Arm 2": "Arm2",
+            " to ": " → ",
+            "base to": "",
+            "stage": "stage",
+            "arm 1": "arm1",
+            "arm 2": "arm2",
         }
         
         for old, new in replacements.items():
             name = name.replace(old, new)
             
         return name.strip()
-    
-    def _compute_joint_poses(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
-        """Compute world poses for all joints using forward kinematics."""
-        joint_poses = {}
-        
-        for config in self.urdf_configs:
-            urdf_name = config["name"]
-            urdf = config["urdf"]
-            viser_urdf = config["viser_urdf"]
-            
-            try:
-                # Get current joint configuration
-                actuated_joints = viser_urdf.get_actuated_joint_limits()
-                joint_angles = {}
-                
-                # Build joint angles dictionary
-                for joint_name in actuated_joints.keys():
-                    unique_name = f"{urdf_name}::{joint_name}"
-                    if unique_name in self.filtered_joint_names:
-                        idx = self.filtered_joint_names.index(unique_name)
-                        # This will be set by the calling function
-                        joint_angles[joint_name] = 0.0
-                    else:
-                        # Use default for auxiliary joints
-                        lower, upper = actuated_joints[joint_name]
-                        if lower is not None and upper is not None:
-                            joint_angles[joint_name] = (lower + upper) / 2.0
-                        else:
-                            joint_angles[joint_name] = 0.0
-                
-                # Compute forward kinematics for all links
-                fk = urdf.link_fk(cfg=joint_angles)
-                
-                # Extract poses for joints (which connect links)
-                for joint in urdf.robot.joints:
-                    if joint.child in fk:
-                        # Get the transform matrix
-                        transform = fk[joint.child]
-                        position = transform[:3, 3]
-                        
-                        # Convert rotation matrix to quaternion (w, x, y, z)
-                        rotation_matrix = transform[:3, :3]
-                        r = Rotation.from_matrix(rotation_matrix)
-                        quat_wxyz = r.as_quat()  # Returns [x, y, z, w]
-                        quat_wxyz = np.array([quat_wxyz[3], quat_wxyz[0], quat_wxyz[1], quat_wxyz[2]])  # Convert to [w, x, y, z]
-                        
-                        frame_name = f"{urdf_name}_{joint.name}"
-                        joint_poses[frame_name] = (position, quat_wxyz)
-                        
-            except Exception as e:
-                print(f"[FRAMES] Error computing poses for {urdf_name}: {e}")
-                
-        return joint_poses
-    
         
     def add_urdf(self, urdf_path: str, name: str, load_meshes: bool = True, 
                  load_collision_meshes: bool = True):
-        """Add a URDF with smart path resolution and joint filtering."""
+        """Add a URDF with smart path resolution and coordinate frames."""
         try:
             print(f"[SMART-URDF] Loading {name} from {urdf_path}")
             
@@ -261,16 +279,18 @@ class SmartUrdfManager:
                 build_collision_scene_graph=load_collision_meshes,
             )
             
-            # Create ViserUrdfExtended instance with individual coordinate frame controls
-            viser_urdf = ViserUrdfExtended(
+            # Create standard ViserUrdf instance
+            viser_urdf = ViserUrdf(
                 self.server,
                 urdf_or_path=urdf,
                 load_meshes=load_meshes,
                 load_collision_meshes=load_collision_meshes,
                 collision_mesh_color_override=(1.0, 0.0, 0.0, 0.5),
                 root_node_name=f"/{name}",
-                frame_scale=0.1,
             )
+            
+            # Add coordinate frames using built-in Viser system
+            frames = add_urdf_coordinate_frames(self.server, urdf, name, scale=1.0)
             
             # Store configuration
             config = {
@@ -282,6 +302,7 @@ class SmartUrdfManager:
             
             self.viser_urdfs.append(viser_urdf)
             self.urdf_configs.append(config)
+            self.coordinate_frames[name] = frames
             
             # Get ALL joint information from URDF
             all_joints = {}  # joint_name -> (type, limits)
@@ -314,7 +335,7 @@ class SmartUrdfManager:
             
             # Count total joints for coordinate frames
             total_joints = len(urdf.robot.joints)
-            print(f"  📐 Total joints for coordinate frames: {total_joints}")
+            print(f"  📐 Total coordinate frames: {len(frames)}")
             
             # Add to global joint collection with unique naming
             for joint_name, limits in meaningful_joints.items():
@@ -332,7 +353,7 @@ class SmartUrdfManager:
             print(f"[SMART-URDF] Error loading {name}: {e}")
             import traceback
             traceback.print_exc()
-            
+    
     def get_total_meaningful_dof(self) -> int:
         """Get total meaningful degrees of freedom (excluding auxiliary joints)."""
         return len(self.filtered_joint_limits)
@@ -352,9 +373,10 @@ class SmartUrdfManager:
                 urdf_joint_values[urdf_name] = {}
             urdf_joint_values[urdf_name][actual_joint_name] = joint_values[i]
         
-        # Update each ViserUrdf instance
+        # Update each ViserUrdf instance and coordinate frames
         for config in self.urdf_configs:
             urdf_name = config["name"]
+            urdf = config["urdf"]
             viser_urdf = config["viser_urdf"]
             
             if urdf_name in urdf_joint_values:
@@ -378,6 +400,10 @@ class SmartUrdfManager:
                 if cfg:  # Only update if there are actuated joints
                     viser_urdf.update_cfg(np.array(cfg, dtype=np.float32))
                     
+                    # Update coordinate frames
+                    if urdf_name in self.coordinate_frames:
+                        update_urdf_coordinate_frames(urdf, self.coordinate_frames[urdf_name], scale=1.0)
+                    
     def get_initial_configuration(self) -> np.ndarray:
         """Get initial joint configuration for meaningful joints only."""
         initial_config = []
@@ -396,6 +422,7 @@ class SmartUrdfManager:
             initial_config.append(initial_pos)
             
         return np.array(initial_config, dtype=np.float32)
+
 
 def deduplicate_urdfs(urdf_configs: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """Remove duplicate URDFs, preferring newer versions."""
@@ -448,6 +475,7 @@ def deduplicate_urdfs(urdf_configs: List[Tuple[str, str]]) -> List[Tuple[str, st
     
     return deduped
 
+
 async def handle_telemetry_client(websocket):
     """Handle new telemetry WebSocket connections and ping/pong for latency measurement."""
     connect_time = time.perf_counter()
@@ -481,6 +509,7 @@ async def handle_telemetry_client(websocket):
         telemetry_clients.discard(websocket)
         print(f"[TELEMETRY] Removed client, remaining: {len(telemetry_clients)}")
 
+
 def start_telemetry_server():
     """Start the telemetry WebSocket server in a background thread."""
     def run_server():
@@ -501,6 +530,7 @@ def start_telemetry_server():
     thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
     time.sleep(0.1)
+
 
 def send_telemetry_to_clients(payload_bytes: bytes):
     """Send telemetry data to all connected WebSocket clients."""
@@ -523,6 +553,7 @@ def send_telemetry_to_clients(payload_bytes: bytes):
     
     if disconnected:
         telemetry_clients.difference_update(disconnected)
+
 
 def publish_telemetry(cfg: np.ndarray) -> None:
     """Publish telemetry with performance metrics."""
@@ -554,6 +585,7 @@ def publish_telemetry(cfg: np.ndarray) -> None:
     if seq_counter % 50 == 0 or hz < 10:
         print(f"[TELEMETRY] seq={seq_counter}, nq={cfg.shape[0]}, rate={hz:.1f}Hz, bytes={len(packed)}")
 
+
 def create_smart_control_sliders(
     server: viser.ViserServer, urdf_manager: SmartUrdfManager
 ) -> Tuple[List[viser.GuiInputHandle[float]], List[str], np.ndarray]:
@@ -574,7 +606,7 @@ def create_smart_control_sliders(
     # Create organized sliders
     for urdf_name, urdf_joint_names in urdf_groups.items():
         joint_count = len(urdf_joint_names)
-        with server.gui.add_folder(f"🤖 {urdf_name.title()} ({joint_count} DOF)"):
+        with server.gui.add_folder(f"🤖 {urdf_name} ({joint_count} DOF)"):
             for joint_name in urdf_joint_names:
                 i = urdf_manager.filtered_joint_names.index(joint_name)
                 actual_joint_name = joint_name.split("::", 1)[1]
@@ -586,11 +618,9 @@ def create_smart_control_sliders(
                 if upper is None:
                     upper = np.pi
                 
-                # Create readable label
+                # Create clean, compact label (no range info - it's shown on slider)
                 short_name = urdf_manager._get_short_joint_name(actual_joint_name)
-                units = "°" if abs(upper - lower) > 6 else "m"  # Rough guess for units
-                range_str = f"[{lower:.2f}, {upper:.2f}]{units}"
-                label = f"{short_name} {range_str}"
+                label = short_name
                 
                 slider = server.gui.add_slider(
                     label=label,
@@ -610,6 +640,7 @@ def create_smart_control_sliders(
                 joint_names.append(joint_name)
     
     return slider_handles, joint_names, initial_config
+
 
 def discover_workcell_urdfs(workcell_name: str) -> List[Tuple[str, str]]:
     """Discover all URDF files in a workcell directory."""
@@ -637,8 +668,9 @@ def discover_workcell_urdfs(workcell_name: str) -> List[Tuple[str, str]]:
         
     return urdf_configs
 
+
 def main(
-    workcell: str = "workcell_alpha_2",
+    workcell: str = "workcell_beta",
     load_meshes: bool = True,
     load_collision_meshes: bool = True,
     stress: bool = False,
@@ -648,7 +680,7 @@ def main(
     stress_joints: Optional[int] = None,
 ) -> None:
     """
-    Enhanced Multi-URDF system with coordinate frame visualization.
+    Simplified Multi-URDF system with built-in coordinate frame visualization.
     """
     
     # Start Viser server
@@ -662,7 +694,7 @@ def main(
     start_telemetry_server()
     print("[TELEMETRY] Telemetry system initialized")
     
-    # Initialize smart URDF manager with coordinate frames
+    # Initialize simplified URDF manager
     urdf_manager = SmartUrdfManager(server)
     
     # Discover and deduplicate URDFs
@@ -676,7 +708,7 @@ def main(
     urdf_configs = deduplicate_urdfs(urdf_configs)
     print(f"[MAIN] After deduplication: {len(urdf_configs)} URDFs")
     
-    # Load all URDFs with smart processing
+    # Load all URDFs with coordinate frames
     for urdf_path, urdf_name in urdf_configs:
         urdf_manager.add_urdf(
             urdf_path, 
@@ -686,25 +718,25 @@ def main(
         )
     
     meaningful_dof = urdf_manager.get_total_meaningful_dof()
-    print(f"\n[MAIN] 🎯 Smart Loading Summary:")
+    print(f"\n[MAIN] 🎯 Simplified System Summary:")
     print(f"  - Total URDFs: {len(urdf_configs)}")
     print(f"  - Meaningful DOF: {meaningful_dof}")
     print(f"  - Workcell: {workcell}")
-    print(f"  - Meshes resolved: ✅")
-    print(f"  - Coordinate frames: ✅")
+    print(f"  - Built-in coordinate frames: ✅")
+    print(f"  - Scene tree integration: ✅")
     
     if meaningful_dof == 0:
         print("[MAIN] No meaningful joints found!")
         return
     
     # Create smart control sliders
-    with server.gui.add_folder("🎛️ Smart Joint Control"):
+    with server.gui.add_folder("Joint Control"):
         (slider_handles, joint_names, initial_config) = create_smart_control_sliders(
             server, urdf_manager
         )
     
     # Add visibility controls
-    with server.gui.add_folder("👁️ Visibility"):
+    with server.gui.add_folder("Visibility"):
         show_meshes_cb = server.gui.add_checkbox("Show visual meshes", load_meshes)
         show_collision_meshes_cb = server.gui.add_checkbox("Show collision meshes", load_collision_meshes)
     
@@ -717,9 +749,6 @@ def main(
     def _(_):
         for viser_urdf in urdf_manager.viser_urdfs:
             viser_urdf.show_collision = show_collision_meshes_cb.value
-    
-    # Note: Individual coordinate frame controls are now handled by ViserUrdfExtended
-    # Each URDF gets its own coordinate frame toggle buttons in the GUI automatically
     
     # Set initial configuration
     urdf_manager.update_all_configurations(initial_config)
@@ -734,7 +763,7 @@ def main(
     )
     
     # Create reset button
-    reset_button = server.gui.add_button("🔄 Reset All Joints")
+    reset_button = server.gui.add_button("Reset All Joints")
     @reset_button.on_click
     def _(_):
         for s, init_val in zip(slider_handles, initial_config):
@@ -745,7 +774,7 @@ def main(
         nq = stress_joints if stress_joints is not None else meaningful_dof
         nq = min(nq, meaningful_dof)
         
-        with server.gui.add_folder("🔥 Smart Stress Testing"):
+        with server.gui.add_folder("Stress Testing"):
             stress_enabled_cb = server.gui.add_checkbox("Enable Stress Testing", False)
             stress_hz_slider = server.gui.add_slider(
                 "Frequency (Hz)",
@@ -784,13 +813,13 @@ def main(
         
         def run_stress_testing_in_thread():
             """Run smart stress testing loop with coordinate frame updates."""
-            print(f"🚀 [SMART-STRESS] Starting intelligent multi-URDF stress test with coordinate frames:")
+            print(f"🚀 [SMART-STRESS] Starting simplified multi-URDF stress test:")
             print(f"   Total URDFs: {len(urdf_configs)}")
             print(f"   Meaningful DOF: {meaningful_dof}")
             print(f"   Stress joints: {nq}")
             print(f"   Initial frequency: {current_stress_hz:.1f} Hz")
             print(f"   Initial amplitude: ±{current_stress_amplitude:.2f} rad")
-            print(f"   Individual coordinate frames: ✅ Available via GUI buttons")
+            print(f"   Built-in coordinate frames: ✅ Toggle in scene tree")
             print()
             
             phases = np.linspace(0, 2*np.pi, nq, endpoint=False)
@@ -822,7 +851,7 @@ def main(
                 if loop_start - last_stats >= 10.0:
                     elapsed = loop_start - t0
                     avg_hz = msg_count / elapsed if elapsed > 0 else 0
-                    print(f"🔥 [SMART-STRESS] {msg_count:,} updates | {elapsed:.1f}s | {avg_hz:.1f} Hz avg | Target: {hz:.1f} Hz | {nq}/{meaningful_dof} DOF | Individual frames available via GUI")
+                    print(f"🔥 [SMART-STRESS] {msg_count:,} updates | {elapsed:.1f}s | {avg_hz:.1f} Hz avg | Target: {hz:.1f} Hz | {nq}/{meaningful_dof} DOF | Frames: Built-in scene tree")
                     last_stats = loop_start
                 
                 # Sleep to maintain frequency
@@ -832,7 +861,7 @@ def main(
                 if sleep_time > 0:
                     time.sleep(sleep_time)
             
-            print("⏹️ [SMART-STRESS] Intelligent stress testing stopped")
+            print("⏹️ [SMART-STRESS] Simplified stress testing stopped")
         
         @stress_enabled_cb.on_update
         def _(_):
@@ -842,26 +871,27 @@ def main(
                 stress_thread = threading.Thread(target=run_stress_testing_in_thread, daemon=True)
                 stress_thread.start()
                 stress_info.value = f"🔥 ACTIVE - {current_stress_hz:.1f}Hz, {nq}/{meaningful_dof} joints"
-                print(f"🚀 [SMART-STRESS] Started intelligent stress testing: {current_stress_hz:.1f}Hz")
+                print(f"🚀 [SMART-STRESS] Started simplified stress testing: {current_stress_hz:.1f}Hz")
                 
             elif not stress_enabled_cb.value and stress_thread is not None:
                 stress_running.clear()
                 stress_thread = None
                 stress_info.value = "Disabled"
-                print("⏹️ [SMART-STRESS] Stopped intelligent stress testing")
+                print("⏹️ [SMART-STRESS] Stopped simplified stress testing")
         
-        print(f"[SMART-STRESS] Intelligent stress testing available")
+        print(f"[SMART-STRESS] Simplified stress testing available")
         print(f"[SMART-STRESS] Config: {stress_hz:.1f}Hz, {nq}/{meaningful_dof} joints, ±{stress_amplitude:.2f}rad")
     
-    print(f"\n[MAIN] 🎉 Enhanced Multi-URDF System with Coordinate Frames Ready!")
+    print(f"\n[MAIN] 🎉 Simplified Multi-URDF System Ready!")
     print(f"[MAIN] Ready for visualization with {meaningful_dof} meaningful DOF")
-    print(f"[MAIN] 📐 Coordinate frame visualization available")
+    print(f"[MAIN] 📐 Coordinate frames available in scene tree (Configuration & Diagnostics tab)")
     print(f"[TELEMETRY] WebSocket telemetry available on port 8081")
     print(f"[MAIN] View at: http://localhost:8080")
     
     # Run forever
     while True:
         time.sleep(10.0)
+
 
 if __name__ == "__main__":
     tyro.cli(main)
