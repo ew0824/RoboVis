@@ -65,15 +65,13 @@ export default function SliderComponent({
             ? [
                 {
                   value: min,
-                  // The regex here removes trailing zeros and the decimal
-                  // point if the number is an integer.
-                  label: `${min.toFixed(6).replace(/\.?0+$/, "")}`,
+                  // Show 2 decimal places
+                  label: `${min.toFixed(2)}`,
                 },
                 {
                   value: max,
-                  // The regex here removes trailing zeros and the decimal
-                  // point if the number is an integer.
-                  label: `${max.toFixed(6).replace(/\.?0+$/, "")}`,
+                  // Show 2 decimal places
+                  label: `${max.toFixed(2)}`,
                 },
               ]
             : marks
@@ -91,7 +89,8 @@ export default function SliderComponent({
         max={max}
         hideControls
         step={step ?? undefined}
-        // precision={precision}
+        decimalScale={2}
+        fixedDecimalScale={true}
         style={{ width: "3rem" }}
         styles={{
           input: {
