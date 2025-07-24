@@ -7,59 +7,70 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 class JointMapper:
-    """Maps robot data parts to URDF joint names for demo"""
+    """Maps robot data parts to URDF joint names using real config data"""
     
     def __init__(self):
-        # Hardcoded mapping for demo - adjust these by trial and error
+        # Real mapping based on model_manager_test_config.yaml
         self.part_to_urdf_mapping = {
-            # ARM part (6 joints) - likely maps to infeed_and_squash_turner
+            # ARM part (6 joints) - maps to infeed_and_squash_turner
             "ARM": {
                 "urdf_name": "infeed_and_squash_turner",
                 "joint_names": [
-                    "scara_arm_1_joint",
-                    "scara_arm_2_joint", 
-                    "scara_eoat_joint",
-                    "scara_arm_1_to_scara_arm_2_joint",
-                    "scara_arm_2_to_scara_eoat_joint",
-                    "scara_eoat_to_scara_tool_joint"
+                    "ur_base_link_to_shoulder",
+                    "shoulder_to_upper_arm",
+                    "upper_arm_to_forearm",
+                    "forearm_to_wrist_1",
+                    "wrist_1_to_wrist_2",
+                    "wrist_2_to_wrist_3"
                 ]
             },
             
-            # PEDESTAL part (2 joints) - likely gantry system
+            # PEDESTAL part (2 joints) - maps to infeed_and_squash_turner (gantry system)
             "PEDESTAL": {
-                "urdf_name": "robot_gantry",
+                "urdf_name": "infeed_and_squash_turner",
                 "joint_names": [
-                    "robot_gantry_xstage_joint",
-                    "robot_gantry_ystage_joint"
+                    "robot_gantry_base_to_zstage",
+                    "robot_gantry_zstage_to_ystage"
                 ]
             },
             
-            # BAND_SEPARATOR part (4 joints) - maps to band_separator URDF
+            # BAND_SEPARATOR part (5 joints) - maps to band_separator URDF
             "BAND_SEPARATOR": {
                 "urdf_name": "band_separator", 
                 "joint_names": [
                     "band_separator_base_to_ystage",
-                    "band_separator_ystage_to_zstage",
-                    "band_separator_zstage_to_xstage",
-                    "band_separator_extra_joint"  # 4th joint - might need adjustment
+                    "band_separator_ystage_to_lowerjaw_zstage",
+                    "band_separator_lowerjaw_zstage_to_xstage",
+                    "band_separator_ystage_to_upperjaw_zstage",
+                    "band_separator_upperjaw_zstage_to_xstage"
                 ]
             },
             
-            # EOAT parts - end effector components
+            # EOAT parts - end effector components (part of infeed_and_squash_turner)
             "EOAT_BLADE": {
-                "urdf_name": "eoat_blade",
-                "joint_names": ["blade_actuator_joint"]
+                "urdf_name": "infeed_and_squash_turner",
+                "joint_names": ["tool_base_to_blade"]
             },
             
             "EOAT_GRIPPER": {
-                "urdf_name": "eoat_gripper", 
-                "joint_names": ["gripper_joint"]
+                "urdf_name": "infeed_and_squash_turner", 
+                "joint_names": ["tool_base_to_left_paddle"]
             },
             
             "EOAT_EJECTOR": {
-                "urdf_name": "eoat_ejector",
-                "joint_names": ["ejector_joint_1", "ejector_joint_2"]
+                "urdf_name": "infeed_and_squash_turner",
+                "joint_names": ["tool_base_to_blade", "tool_base_to_left_paddle"]
             }
+        }
+        
+        # Expected DOF counts from config for validation
+        self.expected_dof_counts = {
+            "ARM": 6,
+            "PEDESTAL": 2,
+            "BAND_SEPARATOR": 5,  # Config shows 5, not 4!
+            "EOAT_BLADE": 1,
+            "EOAT_GRIPPER": 1,
+            "EOAT_EJECTOR": 2
         }
     
     def get_mapped_joints(self, part_name: str) -> Optional[Dict]:
@@ -138,6 +149,85 @@ class JointMapper:
                 all_valid = False
         
         return all_valid
+    
+    def validate_robot_data(self, robot_data: Dict) -> Tuple[bool, List[str]]:
+        """Validate robot data against expected mappings and detect unrecognized parts"""
+        print("\n[MAPPER] === ROBOT DATA VALIDATION ===")
+        
+        unrecognized_parts = []
+        dof_mismatches = []
+        all_valid = True
+        
+        if 'parts' not in robot_data:
+            print("❌ No 'parts' key found in robot data")
+            return False, ["Missing 'parts' key"]
+        
+        # Check each part in robot data
+        for part_name, part_positions in robot_data['parts'].items():
+            if part_name not in self.part_to_urdf_mapping:
+                print(f"⚠️  UNRECOGNIZED PART: {part_name} (has {len(part_positions)} joints)")
+                unrecognized_parts.append(part_name)
+                all_valid = False
+            else:
+                # Check DOF count
+                expected_dof = len(self.part_to_urdf_mapping[part_name]["joint_names"])
+                actual_dof = len(part_positions)
+                
+                if expected_dof != actual_dof:
+                    print(f"❌ {part_name}: Expected {expected_dof} DOF, got {actual_dof}")
+                    dof_mismatches.append(f"{part_name}: {expected_dof} vs {actual_dof}")
+                    all_valid = False
+                else:
+                    print(f"✅ {part_name}: {actual_dof} DOF (matches)")
+        
+        # Check for missing expected parts
+        expected_parts = set(self.part_to_urdf_mapping.keys())
+        actual_parts = set(robot_data['parts'].keys())
+        missing_parts = expected_parts - actual_parts
+        
+        if missing_parts:
+            print(f"⚠️  MISSING PARTS: {missing_parts}")
+            # Don't mark as invalid - some parts might be optional
+        
+        print(f"\n[MAPPER] Summary: {len(unrecognized_parts)} unrecognized, {len(dof_mismatches)} DOF mismatches")
+        
+        return all_valid, unrecognized_parts + dof_mismatches
+    
+    def get_comprehensive_validation_report(self, robot_data: Dict) -> str:
+        """Get a comprehensive validation report for debugging"""
+        report = []
+        report.append("=== COMPREHENSIVE VALIDATION REPORT ===")
+        
+        # Validate robot data
+        is_valid, errors = self.validate_robot_data(robot_data)
+        
+        if is_valid:
+            report.append("✅ All robot data parts are recognized and properly mapped")
+        else:
+            report.append("❌ Issues found:")
+            for error in errors:
+                report.append(f"  - {error}")
+        
+        # Show expected vs actual DOF counts
+        report.append("\n=== DOF COMPARISON ===")
+        for part_name, expected_dof in self.expected_dof_counts.items():
+            if part_name in robot_data.get('parts', {}):
+                actual_dof = len(robot_data['parts'][part_name])
+                status = "✅" if expected_dof == actual_dof else "❌"
+                report.append(f"{status} {part_name}: Expected {expected_dof}, Got {actual_dof}")
+            else:
+                report.append(f"⚠️  {part_name}: Missing from robot data")
+        
+        # Show URDF mapping summary
+        report.append("\n=== URDF MAPPING SUMMARY ===")
+        for urdf_name in self.get_all_urdf_names():
+            parts = self.get_joint_mapping_for_urdf(urdf_name)
+            total_joints = sum(len(joints) for joints in parts.values())
+            report.append(f"📦 {urdf_name}: {len(parts)} parts, {total_joints} joints")
+            for part_name, joint_names in parts.items():
+                report.append(f"  - {part_name}: {len(joint_names)} joints")
+        
+        return "\n".join(report)
 
 
 def test_joint_mapper():
