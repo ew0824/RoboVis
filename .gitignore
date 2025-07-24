@@ -4,6 +4,7 @@ workcell_alpha_2/
 workcell_beta/
 robot_description/
 testing/
+*.data.json
 
 # Viser .gitignore
 *.swp
