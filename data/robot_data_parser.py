@@ -36,7 +36,8 @@ class RobotDataParser:
         
         # Downsample the data
         downsampled_data = self.raw_data[::downsample_factor]
-        print(f"[PARSER] Downsampled to {len(downsampled_data)} entries")
+        
+        print(f"[PARSER] Downsampled from {len(self.raw_data)} to {len(downsampled_data)} entries")
         
         # Parse each entry
         parsed_entries = []
