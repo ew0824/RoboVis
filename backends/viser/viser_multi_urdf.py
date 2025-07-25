@@ -234,18 +234,10 @@ class SmartUrdfManager:
         # Replace underscores with spaces but keep lowercase
         name = name.replace("_", " ")
         
-        # # Fix stage naming: ystage → y_stage, zstage → z_stage, etc.
-        # name = name.replace("ystage", "y_stage")
-        # name = name.replace("zstage", "z_stage") 
-        # name = name.replace("xstage", "x_stage")
-        
         # Shorten common terms (keeping lowercase)
         replacements = {
             " to ": " → ",
             "base to": "",
-            "stage": "stage",
-            "arm 1": "arm1",
-            "arm 2": "arm2",
         }
         
         for old, new in replacements.items():

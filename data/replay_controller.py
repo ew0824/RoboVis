@@ -12,7 +12,7 @@ from joint_mapper import JointMapper
 class SimpleReplayController:
     """Simple replay controller for demo purposes"""
     
-    def __init__(self, json_file: str = "data/robot_status.data.json"):
+    def __init__(self, json_file: str = "data/robot_status_beta.data.json"):
         self.parser = RobotDataParser(json_file)
         self.mapper = JointMapper()
         

@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple
 class RobotDataParser:
     """Simple robot data parser for demo purposes"""
     
-    def __init__(self, json_file: str = "data/robot_status.data.json"):
+    def __init__(self, json_file: str = "data/robot_status_beta.data.json"):
         self.json_file = json_file
         self.raw_data = None
         self.parsed_data = None
