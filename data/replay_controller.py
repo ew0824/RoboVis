@@ -12,25 +12,26 @@ from joint_mapper import JointMapper
 class SimpleReplayController:
     """Simple replay controller for demo purposes"""
     
-    def __init__(self, json_file: str = "data/robot_status_beta.data.json"):
+    def __init__(self, json_file: str = "data/robot_status_beta.data.json", downsample_factor: int = 5):
         self.parser = RobotDataParser(json_file)
         self.mapper = JointMapper()
+        self.downsample_factor = downsample_factor
         
         # Replay state
         self.current_index = 0
         self.is_playing = False
-        self.playback_speed = 1.0
         self.update_callback = None
         
         # Threading
         self.play_thread = None
         self.stop_event = threading.Event()
         
-        # Initialize data
+        # Initialize data with downsampling
         self.parser.load_data()
-        self.parser.parse_data(downsample_factor=1)
+        self.parser.parse_data(downsample_factor=downsample_factor)
         
         print(f"[REPLAY] Initialized with {len(self.parser.parsed_data)} entries")
+        print(f"[REPLAY] Downsampling: {downsample_factor}x (500Hz → {500/downsample_factor:.0f}Hz)")
         
     def set_update_callback(self, callback: Callable[[Dict], None]) -> None:
         """Set callback function that gets called with joint updates"""
@@ -112,15 +113,15 @@ class SimpleReplayController:
         self._update_visualization()
         print("[REPLAY] Stopped and reset to beginning")
     
-    def set_playback_speed(self, speed: float) -> None:
-        """Set playback speed multiplier"""
-        self.playback_speed = max(0.1, min(5.0, speed))  # Clamp between 0.1x and 5x
-        print(f"[REPLAY] Playback speed set to {self.playback_speed:.1f}x")
     
     def _playback_loop(self) -> None:
-        """Main playback loop (runs in separate thread)"""
-        target_fps = 50  # Target 50 FPS for smooth playback
-        frame_time = 1.0 / target_fps
+        """Main playback loop (runs in separate thread) - REAL-TIME VERSION"""
+        # Calculate real-time frame rate based on downsampling
+        original_rate = 500.0  # Original robot controller rate (500Hz)
+        effective_rate = original_rate / self.downsample_factor
+        frame_time = 1.0 / effective_rate
+        
+        print(f"[REPLAY] Real-time playback at {effective_rate:.1f}Hz (frame time: {frame_time*1000:.1f}ms)")
         
         while self.is_playing and not self.stop_event.is_set():
             start_time = time.time()
@@ -139,12 +140,13 @@ class SimpleReplayController:
                 self._update_visualization()  # Update visualization to show reset position
                 break
             
-            # Sleep to maintain target FPS (adjusted by playback speed)
+            # Sleep to maintain real-time rate
             elapsed = time.time() - start_time
-            sleep_time = (frame_time / self.playback_speed) - elapsed
+            sleep_time = frame_time - elapsed
             
             if sleep_time > 0:
                 time.sleep(sleep_time)
+            # No artificial sleep when we can't keep up - let natural performance limits determine FPS
     
     def _update_visualization(self) -> None:
         """Update visualization with current data"""
@@ -167,8 +169,7 @@ class SimpleReplayController:
         info.update({
             'current_index': self.current_index,
             'current_sequence_id': self.get_current_sequence_id(),
-            'is_playing': self.is_playing,
-            'playback_speed': self.playback_speed
+            'is_playing': self.is_playing
         })
         return info
     
@@ -181,7 +182,6 @@ class SimpleReplayController:
         print(f"Status: {status}")
         print(f"Index: {info['current_index']}/{info['total_entries']}")
         print(f"Sequence ID: {info['current_sequence_id']}")
-        print(f"Speed: {info['playback_speed']:.1f}x")
         print(f"Duration: {info['duration_seconds']:.1f}s")
 
 

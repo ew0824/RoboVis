@@ -20,7 +20,6 @@ class ViserRobotReplaySystem:
         self.urdf_manager = urdf_manager
         self.robot_data = robot_data
         self.replay_controller = None
-        self.replay_mode = False
         
         # GUI handles
         self.replay_controls = None
@@ -55,7 +54,8 @@ class ViserRobotReplaySystem:
             
             # Construct data file path
             data_file = f"data/robot_status{self.robot_data}.data.json"
-            self.replay_controller = SimpleReplayController(data_file)
+            # Use 8x downsampling for optimal demo performance (500Hz → 62.5Hz)
+            self.replay_controller = SimpleReplayController(data_file, downsample_factor=8)
             
             # Set up update callback
             self.replay_controller.set_update_callback(self._on_replay_update)
@@ -68,7 +68,7 @@ class ViserRobotReplaySystem:
     
     def _on_replay_update(self, joint_configs: Dict[str, Dict[str, float]]):
         """Handle updates from replay controller - UNIFIED SLIDER SYSTEM"""
-        if not self.replay_mode or not self.slider_handles:
+        if not self.slider_handles:
             return
             
         try:
@@ -89,16 +89,13 @@ class ViserRobotReplaySystem:
                         # Get the value from the joint config
                         if actual_joint in urdf_joint_config:
                             full_config[i] = urdf_joint_config[actual_joint]
-                        # else: keep default value (0.0)
             
             # 🎯 UNIFIED SYSTEM: Update sliders, which will trigger robot updates
             for i, slider in enumerate(self.slider_handles):
                 if i < len(full_config):
                     # Update slider value - this will trigger the slider callback
                     slider.value = float(full_config[i])
-            
-            # Note: No direct urdf_manager update - sliders handle it via callbacks!
-            
+                    
         except Exception as e:
             print(f"[REPLAY_SYSTEM] Error in unified replay update: {e}")
             import traceback
@@ -117,7 +114,7 @@ class ViserRobotReplaySystem:
         
         # Create replay controls in main GUI (will be positioned at bottom-left)
         # Using a more compact layout
-        replay_folder = self.server.gui.add_folder("🎬 Robot Replay")
+        replay_folder = self.server.gui.add_folder("Offline Replay")
         
         with replay_folder:
             # Control buttons - compact icons for better layout
@@ -125,21 +122,10 @@ class ViserRobotReplaySystem:
             self.pause_button = self.server.gui.add_button("⏸️ Pause")  
             self.reset_button = self.server.gui.add_button("🔄 Reset")
             
-            # Replay mode toggle
-            replay_mode_checkbox = self.server.gui.add_checkbox(
-                "Replay Mode",
-                initial_value=False
-            )
-            
             # Enhanced status information
             self.status_text = self.server.gui.add_text(
                 "Status",
-                initial_value="Ready - Toggle Replay Mode and click Play"
-            )
-            
-            self.replay_mode_text = self.server.gui.add_text(
-                "Mode",
-                initial_value="DISABLED - Manual control active"
+                initial_value="Ready - Click Play to start replay"
             )
             
             self.frame_progress_text = self.server.gui.add_text(
@@ -161,7 +147,6 @@ class ViserRobotReplaySystem:
             self.play_button.on_click(self._on_play_button_click)
             self.pause_button.on_click(self._on_pause_button_click)
             self.reset_button.on_click(self._on_reset_button_click)
-            replay_mode_checkbox.on_update(self._on_replay_mode_change)
             
             # Start continuous monitoring for enhanced info
             self._start_enhanced_monitoring()
@@ -238,18 +223,6 @@ class ViserRobotReplaySystem:
         else:
             self.status_text.value = f"Sequence {sequence_id} not found"
     
-    def _on_replay_mode_change(self, _):
-        """Handle replay mode toggle"""
-        self.replay_mode = not self.replay_mode
-        
-        if self.replay_mode:
-            self.status_text.value = "Replay mode ENABLED - Robot will follow recorded motion"
-            self.replay_mode_text.value = "ENABLED - Robot follows recorded motion"
-        else:
-            self.status_text.value = "Replay mode DISABLED - Manual control active"
-            self.replay_mode_text.value = "DISABLED - Manual control active"
-        
-        print(f"[REPLAY_SYSTEM] Replay mode: {'ENABLED' if self.replay_mode else 'DISABLED'}")
     
     def _start_enhanced_monitoring(self):
         """Start continuous monitoring for enhanced information display"""
@@ -286,6 +259,7 @@ class ViserRobotReplaySystem:
                     if self.progress_percentage_text:
                         self.progress_percentage_text.value = f"{progress_percentage:.1f}%"
                     
+                    
                     # Update status based on controller state
                     if self.replay_controller.is_playing:
                         if self.status_text.value != "Playing...":
@@ -318,8 +292,7 @@ class ViserRobotReplaySystem:
         if self.monitor_thread:
             self.monitor_thread.join(timeout=1.0)
         print("[REPLAY_SYSTEM] Enhanced monitoring stopped")
-
-
+    
 def main_with_replay(
     workcell: str = "workcell_beta",
     robot_data: int = 1,
@@ -419,10 +392,9 @@ def main_with_replay(
     print(f"[MAIN] Robot replay data: 469 entries, 9.4 seconds")
     print(f"[MAIN] View at: http://localhost:8080")
     print(f"[MAIN] 📋 Instructions:")
-    print(f"[MAIN]   1. Toggle 'Replay Mode' to enable robot replay")
-    print(f"[MAIN]   2. Click 'Play' to start recorded motion")
-    print(f"[MAIN]   3. Click 'Pause' to pause playback")
-    print(f"[MAIN]   4. Use manual sliders when replay mode is disabled")
+    print(f"[MAIN]   1. Click 'Play' to start recorded robot motion")
+    print(f"[MAIN]   2. Use manual sliders anytime for override control")
+    print(f"[MAIN]   3. Click 'Reset' to return to starting position")
     
     # Run forever
     while True:
