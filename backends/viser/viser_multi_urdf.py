@@ -598,7 +598,7 @@ def create_smart_control_sliders(
     # Create organized sliders
     for urdf_name, urdf_joint_names in urdf_groups.items():
         joint_count = len(urdf_joint_names)
-        with server.gui.add_folder(f"🤖 {urdf_name} ({joint_count} DOF)"):
+        with server.gui.add_folder(f"{urdf_name} ({joint_count} DOF)"):
             for joint_name in urdf_joint_names:
                 i = urdf_manager.filtered_joint_names.index(joint_name)
                 actual_joint_name = joint_name.split("::", 1)[1]
