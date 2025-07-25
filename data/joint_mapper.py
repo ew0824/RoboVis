@@ -10,11 +10,11 @@ class JointMapper:
     """Maps robot data parts to URDF joint names using real config data"""
     
     def __init__(self):
-        # Real mapping based on model_manager_test_config.yaml
+        # Real mapping based on workcell_beta actual joint names
         self.part_to_urdf_mapping = {
-            # ARM part (6 joints) - maps to infeed_and_squash_turner
+            # ARM part (6 joints) - maps to robot_gantry
             "ARM": {
-                "urdf_name": "infeed_and_squash_turner",
+                "urdf_name": "robot_gantry",
                 "joint_names": [
                     "ur_base_link_to_shoulder",
                     "shoulder_to_upper_arm",
@@ -25,49 +25,48 @@ class JointMapper:
                 ]
             },
             
-            # PEDESTAL part (2 joints) - maps to infeed_and_squash_turner (gantry system)
+            # PEDESTAL part (2 joints) - maps to robot_gantry (gantry system)
             "PEDESTAL": {
-                "urdf_name": "infeed_and_squash_turner",
+                "urdf_name": "robot_gantry",
                 "joint_names": [
-                    "robot_gantry_base_to_zstage",
-                    "robot_gantry_zstage_to_ystage"
+                    "robot_gantry_base_to_ystage",
+                    "robot_gantry_ystage_to_zstage"
                 ]
             },
             
-            # BAND_SEPARATOR part (5 joints) - maps to band_separator URDF
+            # BAND_SEPARATOR part (4 joints) - maps to band_separator URDF (only 3 available)
             "BAND_SEPARATOR": {
                 "urdf_name": "band_separator", 
                 "joint_names": [
                     "band_separator_base_to_ystage",
-                    "band_separator_ystage_to_lowerjaw_zstage",
-                    "band_separator_lowerjaw_zstage_to_xstage",
-                    "band_separator_ystage_to_upperjaw_zstage",
-                    "band_separator_upperjaw_zstage_to_xstage"
+                    "band_separator_ystage_to_zstage",
+                    "band_separator_zstage_to_xstage"
+                    # Note: Robot data has 4 joints but beta URDF only has 3
                 ]
             },
             
-            # EOAT parts - end effector components (part of infeed_and_squash_turner)
+            # EOAT parts - end effector components (part of robot_gantry)
             "EOAT_BLADE": {
-                "urdf_name": "infeed_and_squash_turner",
-                "joint_names": ["tool_base_to_blade"]
+                "urdf_name": "robot_gantry",
+                "joint_names": ["fixed_paddle_to_blade_carriage"]
             },
             
             "EOAT_GRIPPER": {
-                "urdf_name": "infeed_and_squash_turner", 
-                "joint_names": ["tool_base_to_left_paddle"]
+                "urdf_name": "robot_gantry", 
+                "joint_names": ["fixed_paddle_to_left_paddle_futek_sensor"]
             },
             
             "EOAT_EJECTOR": {
-                "urdf_name": "infeed_and_squash_turner",
-                "joint_names": ["tool_base_to_blade", "tool_base_to_left_paddle"]
+                "urdf_name": "robot_gantry",
+                "joint_names": ["fixed_paddle_to_blade_carriage", "fixed_paddle_to_left_paddle_futek_sensor"]
             }
         }
         
-        # Expected DOF counts from config for validation
+        # Expected DOF counts from robot data for validation
         self.expected_dof_counts = {
             "ARM": 6,
             "PEDESTAL": 2,
-            "BAND_SEPARATOR": 5,  # Config shows 5, not 4!
+            "BAND_SEPARATOR": 4,  # Robot data has 4, but beta URDF only has 3
             "EOAT_BLADE": 1,
             "EOAT_GRIPPER": 1,
             "EOAT_EJECTOR": 2

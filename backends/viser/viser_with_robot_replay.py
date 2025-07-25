@@ -15,9 +15,10 @@ from replay_controller import SimpleReplayController
 class ViserRobotReplaySystem:
     """Integrates robot replay with Viser multi-URDF system"""
     
-    def __init__(self, server: viser.ViserServer, urdf_manager: SmartUrdfManager):
+    def __init__(self, server: viser.ViserServer, urdf_manager: SmartUrdfManager, robot_data: int = 1):
         self.server = server
         self.urdf_manager = urdf_manager
+        self.robot_data = robot_data
         self.replay_controller = None
         self.replay_mode = False
         
@@ -34,73 +35,74 @@ class ViserRobotReplaySystem:
         self.monitor_thread = None
         self.monitor_running = False
         
+        # Slider handles for unified control
+        self.slider_handles = None
+        self.joint_names = None
+        
         # Initialize replay controller
         self._initialize_replay_controller()
+        
+    def set_slider_handles(self, slider_handles, joint_names):
+        """Set slider handles for unified control"""
+        self.slider_handles = slider_handles
+        self.joint_names = joint_names
+        print(f"[REPLAY_SYSTEM] Connected to {len(slider_handles)} sliders for unified control")
         
     def _initialize_replay_controller(self):
         """Initialize the replay controller"""
         try:
-            print("[REPLAY_SYSTEM] Initializing robot replay controller...")
-            self.replay_controller = SimpleReplayController()
+            print(f"[REPLAY_SYSTEM] Initializing robot replay controller with data file {self.robot_data}...")
+            
+            # Construct data file path
+            data_file = f"data/robot_status{self.robot_data}.data.json"
+            self.replay_controller = SimpleReplayController(data_file)
             
             # Set up update callback
             self.replay_controller.set_update_callback(self._on_replay_update)
             
-            print("[REPLAY_SYSTEM] Robot replay controller initialized successfully")
+            print(f"[REPLAY_SYSTEM] Robot replay controller initialized successfully with {data_file}")
             
         except Exception as e:
             print(f"[REPLAY_SYSTEM] Error initializing replay controller: {e}")
             self.replay_controller = None
     
     def _on_replay_update(self, joint_configs: Dict[str, Dict[str, float]]):
-        """Handle updates from replay controller"""
-        if not self.replay_mode:
+        """Handle updates from replay controller - UNIFIED SLIDER SYSTEM"""
+        if not self.replay_mode or not self.slider_handles:
             return
             
-        # Convert joint configs to format expected by urdf_manager
         try:
-            # For now, focus on the band_separator which we know exists
-            if 'band_separator' in joint_configs:
-                band_config = joint_configs['band_separator']
-                
-                # Map to the existing SmartUrdfManager format
-                # We need to match the joint names to the actual URDF joints
-                joint_values = []
-                
-                # Get the actual joint names from the URDF manager
-                for joint_name in self.urdf_manager.filtered_joint_names:
-                    if 'band_separator' in joint_name:
-                        # Extract the actual joint name after the "::"
+            # Create full configuration array for all joints
+            full_config = np.zeros(len(self.urdf_manager.filtered_joint_names))
+            
+            # Process each URDF's joint configuration
+            for urdf_name, urdf_joint_config in joint_configs.items():
+                if not urdf_joint_config:
+                    continue
+                    
+                # Find joints for this URDF in the filtered joint names
+                for i, joint_name in enumerate(self.urdf_manager.filtered_joint_names):
+                    # Joint names are in format "urdf_name::actual_joint_name"
+                    if joint_name.startswith(f"{urdf_name}::"):
                         actual_joint = joint_name.split("::", 1)[1]
                         
-                        # Map our hardcoded names to actual URDF joint names
-                        if actual_joint == "band_separator_base_to_ystage":
-                            joint_values.append(band_config.get('band_separator_base_to_ystage', 0.0))
-                        elif actual_joint == "band_separator_ystage_to_zstage":
-                            joint_values.append(band_config.get('band_separator_ystage_to_zstage', 0.0))
-                        elif actual_joint == "band_separator_zstage_to_xstage":
-                            joint_values.append(band_config.get('band_separator_zstage_to_xstage', 0.0))
-                        else:
-                            joint_values.append(0.0)
-                
-                # Update the URDF manager with the mapped values
-                if joint_values:
-                    # Create full configuration array (replay values + zeros for other joints)
-                    full_config = np.zeros(len(self.urdf_manager.filtered_joint_names))
-                    
-                    # Fill in the band_separator joints
-                    band_start_idx = 0
-                    for i, joint_name in enumerate(self.urdf_manager.filtered_joint_names):
-                        if 'band_separator' in joint_name:
-                            if band_start_idx < len(joint_values):
-                                full_config[i] = joint_values[band_start_idx]
-                                band_start_idx += 1
-                    
-                    # Update the visualization
-                    self.urdf_manager.update_all_configurations(full_config)
-                    
+                        # Get the value from the joint config
+                        if actual_joint in urdf_joint_config:
+                            full_config[i] = urdf_joint_config[actual_joint]
+                        # else: keep default value (0.0)
+            
+            # 🎯 UNIFIED SYSTEM: Update sliders, which will trigger robot updates
+            for i, slider in enumerate(self.slider_handles):
+                if i < len(full_config):
+                    # Update slider value - this will trigger the slider callback
+                    slider.value = float(full_config[i])
+            
+            # Note: No direct urdf_manager update - sliders handle it via callbacks!
+            
         except Exception as e:
-            print(f"[REPLAY_SYSTEM] Error in replay update: {e}")
+            print(f"[REPLAY_SYSTEM] Error in unified replay update: {e}")
+            import traceback
+            traceback.print_exc()
     
     def add_replay_controls(self):
         """Add enhanced replay controls positioned at bottom-left"""
@@ -319,7 +321,8 @@ class ViserRobotReplaySystem:
 
 
 def main_with_replay(
-    workcell: str = "workcell_alpha_2",
+    workcell: str = "workcell_beta",
+    robot_data: int = 1,
     load_meshes: bool = True,
     load_collision_meshes: bool = True,
     **kwargs
@@ -364,16 +367,19 @@ def main_with_replay(
     print(f"[MAIN] System loaded with {meaningful_dof} meaningful DOF")
     
     # Initialize robot replay system
-    replay_system = ViserRobotReplaySystem(server, urdf_manager)
-    
-    # Add replay controls
-    replay_system.add_replay_controls()
+    replay_system = ViserRobotReplaySystem(server, urdf_manager, robot_data)
     
     # Create manual control sliders
     with server.gui.add_folder("Manual Joint Control"):
         (slider_handles, joint_names, initial_config) = create_smart_control_sliders(
             server, urdf_manager
         )
+    
+    # Connect sliders to replay system for unified control
+    replay_system.set_slider_handles(slider_handles, joint_names)
+    
+    # Add replay controls
+    replay_system.add_replay_controls()
     
     # Add visibility controls
     with server.gui.add_folder("Visibility"):
