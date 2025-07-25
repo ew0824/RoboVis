@@ -19,10 +19,11 @@ from replay_controller import SimpleReplayController
 class ViserRobotReplaySystem:
     """Integrates robot replay with Viser multi-URDF system"""
     
-    def __init__(self, server: viser.ViserServer, urdf_manager: SmartUrdfManager, robot_data: int = 1):
+    def __init__(self, server: viser.ViserServer, urdf_manager: SmartUrdfManager, robot_data: int = 1, downsample: int = 10):
         self.server = server
         self.urdf_manager = urdf_manager
         self.robot_data = robot_data
+        self.downsample = downsample
         self.replay_controller = None
         
         # GUI handles
@@ -58,12 +59,13 @@ class ViserRobotReplaySystem:
             
             # Construct data file path
             data_file = f"data/robot_status{self.robot_data}.data.json"
-            self.replay_controller = SimpleReplayController(data_file, downsample_factor=10)
+            self.replay_controller = SimpleReplayController(data_file, downsample_factor=self.downsample)
             
             # Set up update callback
             self.replay_controller.set_update_callback(self._on_replay_update)
             
             print(f"[REPLAY_SYSTEM] Robot replay controller initialized successfully with {data_file}")
+            print(f"[REPLAY_SYSTEM] Using downsample factor: {self.downsample}x")
             
         except Exception as e:
             print(f"[REPLAY_SYSTEM] Error initializing replay controller: {e}")
@@ -307,6 +309,7 @@ def main_with_replay(
     stress_amplitude: float = 0.3,
     stress_wave_freq: float = 0.3,
     stress_joints: Optional[int] = None,
+    downsample: int = 10,
     **kwargs
 ) -> None:
     """
@@ -323,6 +326,7 @@ def main_with_replay(
         stress_amplitude: Stress test amplitude in radians
         stress_wave_freq: Stress test wave frequency
         stress_joints: Number of joints to stress test (None = all)
+        downsample: Downsampling factor for replay data (default: 10)
     """
     
     # Start Viser server
@@ -363,7 +367,7 @@ def main_with_replay(
     # Initialize robot replay system (only if enabled)
     replay_system = None
     if replay:
-        replay_system = ViserRobotReplaySystem(server, urdf_manager, robot_data)
+        replay_system = ViserRobotReplaySystem(server, urdf_manager, robot_data, downsample)
     
     # Create manual control sliders
     with server.gui.add_folder("Manual Joint Control"):
