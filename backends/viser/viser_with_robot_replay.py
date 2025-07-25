@@ -31,13 +31,16 @@ class ViserRobotReplaySystem:
         self.play_button = None
         self.pause_button = None
         self.reset_button = None
+        self.timeline_slider = None
         self.status_text = None
-        self.frame_progress_text = None
         self.time_progress_text = None
         self.progress_percentage_text = None
         self.replay_mode_text = None
         self.monitor_thread = None
         self.monitor_running = False
+        
+        # Timeline slider state
+        self.updating_timeline_slider = False  # Flag to prevent callback loops
         
         # Slider handles for unified control
         self.slider_handles = None
@@ -123,19 +126,23 @@ class ViserRobotReplaySystem:
         
         with replay_folder:
             # Control buttons - compact icons for better layout
-            self.play_button = self.server.gui.add_button("▶️ Play")
-            self.pause_button = self.server.gui.add_button("⏸️ Pause")  
-            self.reset_button = self.server.gui.add_button("🔄 Reset")
+            self.play_button = self.server.gui.add_button("▶️")
+            self.pause_button = self.server.gui.add_button("⏸️")  
+            self.reset_button = self.server.gui.add_button("🔄")
+            
+            # Timeline scrubber slider
+            self.timeline_slider = self.server.gui.add_slider(
+                "Timeline",
+                min=0,
+                max=max(1, total_entries - 1),
+                step=1,
+                initial_value=0
+            )
             
             # Enhanced status information
             self.status_text = self.server.gui.add_text(
                 "Status",
                 initial_value="Ready - Click Play to start replay"
-            )
-            
-            self.frame_progress_text = self.server.gui.add_text(
-                "Frame",
-                initial_value=f"0 / {total_entries}"
             )
             
             self.time_progress_text = self.server.gui.add_text(
@@ -152,6 +159,7 @@ class ViserRobotReplaySystem:
             self.play_button.on_click(self._on_play_button_click)
             self.pause_button.on_click(self._on_pause_button_click)
             self.reset_button.on_click(self._on_reset_button_click)
+            self.timeline_slider.on_update(self._on_timeline_change)
             
             # Start continuous monitoring for enhanced info
             self._start_enhanced_monitoring()
@@ -215,6 +223,32 @@ class ViserRobotReplaySystem:
         monitor_thread = threading.Thread(target=monitor, daemon=True)
         monitor_thread.start()
     
+    def _on_timeline_change(self, event):
+        """Handle timeline scrubber slider change"""
+        if self.replay_controller is None:
+            return
+            
+        # Avoid callback loops when we're updating the slider programmatically
+        if self.updating_timeline_slider:
+            return
+            
+        # Pause playback when user scrubs the timeline
+        was_playing = self.replay_controller.is_playing
+        if was_playing:
+            self.replay_controller.pause()
+        
+        # Jump to the selected frame - get value from slider directly
+        frame_index = int(self.timeline_slider.value)
+        self.replay_controller.goto_index(frame_index)
+        
+        # Update status
+        if was_playing:
+            self.status_text.value = "Paused (scrubbing)"
+        else:
+            self.status_text.value = "Paused"
+        
+        print(f"[REPLAY_SYSTEM] Timeline scrubbed to frame {frame_index}")
+
     def _on_sequence_change(self, _):
         """Handle sequence ID input change"""
         if self.replay_controller is None:
@@ -255,15 +289,17 @@ class ViserRobotReplaySystem:
                         current_time = 0.0
                     
                     # Update GUI fields
-                    if self.frame_progress_text:
-                        self.frame_progress_text.value = f"{current_index} / {total_entries}"
-                    
                     if self.time_progress_text:
                         self.time_progress_text.value = f"{current_time:.1f}s / {duration_seconds:.1f}s"
                     
                     if self.progress_percentage_text:
                         self.progress_percentage_text.value = f"{progress_percentage:.1f}%"
                     
+                    # Update timeline slider position during playback
+                    if hasattr(self, 'timeline_slider') and self.timeline_slider:
+                        self.updating_timeline_slider = True
+                        self.timeline_slider.value = current_index
+                        self.updating_timeline_slider = False
                     
                     # Update status based on controller state
                     if self.replay_controller.is_playing:
@@ -370,7 +406,7 @@ def main_with_replay(
         replay_system = ViserRobotReplaySystem(server, urdf_manager, robot_data, downsample)
     
     # Create manual control sliders
-    with server.gui.add_folder("Manual Joint Control"):
+    with server.gui.add_folder("Joint Control"):
         (slider_handles, joint_names, initial_config) = create_smart_control_sliders(
             server, urdf_manager
         )
