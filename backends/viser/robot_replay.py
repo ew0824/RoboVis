@@ -38,8 +38,8 @@ from typing import Dict, List, Optional
 import numpy as np
 import viser
 
-# Add data directory to path for robot data modules
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+# Add replay directory to path for robot data modules
+sys.path.append(os.path.join(os.path.dirname(__file__), 'replay'))
 
 try:
     from robot_data_parser import RobotDataParser

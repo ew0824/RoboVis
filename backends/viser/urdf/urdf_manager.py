@@ -16,7 +16,7 @@ Key Features:
 - Multi-URDF coordination and synchronization
 
 Usage:
-    from urdf_loader import SmartUrdfManager, discover_workcell_urdfs
+    from urdf_manager import SmartUrdfManager, discover_workcell_urdfs
     
     # Create URDF manager
     urdf_manager = SmartUrdfManager(server)
@@ -40,7 +40,7 @@ from yourdfpy import URDF
 from scipy.spatial.transform import Rotation
 
 import viser
-from viser.extras import ViserUrdf
+from viser_urdf import ViserUrdf
 
 from telemetry import publish_telemetry
 

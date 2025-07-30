@@ -16,7 +16,7 @@ The system is designed to be modular and extensible, with each major
 functionality contained in its own module:
 
 - telemetry.py: WebSocket-based performance monitoring
-- urdf_loader.py: URDF loading and multi-robot management
+- urdf_manager.py: URDF loading and multi-robot management
 - stress_test.py: High-frequency performance stress testing
 - robot_replay.py: Robot data playback and replay
 
@@ -44,7 +44,7 @@ import viser
 
 # Import our refactored modules
 from telemetry import start_telemetry_server
-from urdf_loader import (
+from urdf_manager import (
     SmartUrdfManager,
     discover_workcell_urdfs,
     deduplicate_urdfs,
@@ -231,7 +231,7 @@ def main(
     # Print module status
     print("🔧 Module Status:")
     print(f"  - telemetry.py: ✅ Active")
-    print(f"  - urdf_loader.py: ✅ Active")
+    print(f"  - urdf_manager.py: ✅ Active")
     print(f"  - stress_test.py: {'✅ Active' if stress else '⚪ Available'}")
     print(f"  - robot_replay.py: {'✅ Active' if replay and replay_manager else '⚪ Available'}")
     print("="*60)
