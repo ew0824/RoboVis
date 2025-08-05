@@ -40,9 +40,9 @@ from yourdfpy import URDF
 from scipy.spatial.transform import Rotation
 
 import viser
-from viser_urdf import ViserUrdf
+from .viser_urdf import ViserUrdf
 
-from telemetry import publish_telemetry
+from ..telemetry import publish_telemetry
 
 
 class PackagePathResolver:
@@ -408,7 +408,7 @@ class SmartUrdfManager:
             
         This is the main update method that distributes joint values to the
         appropriate URDFs and updates their coordinate frames. It's called
-        during both manual control and robot replay.
+        during both manual control and robot streaming.
         """
         if len(joint_values) != len(self.filtered_joint_names):
             print(f"[SMART-URDF] Warning: Expected {len(self.filtered_joint_names)} joint values, got {len(joint_values)}")

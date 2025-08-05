@@ -7,15 +7,15 @@ import json
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
-from robot_data_parser import RobotDataParser
-from joint_mapper import JointMapper
+from .parser import DataParser
+from .joint_mapper import JointMapper
 
 class RobotDataAnalyzer:
     """Analyzes robot data to understand joint movement patterns"""
     
     def __init__(self, json_file: str):
         self.json_file = json_file
-        self.parser = RobotDataParser(json_file)
+        self.parser = DataParser(json_file)
         self.mapper = JointMapper()
         
         # Analysis results
