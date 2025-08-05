@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Performance Profiler - Integration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .section {
+            background-color: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .code {
+            background-color: #333;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .button.danger {
+            background-color: #dc3545;
+        }
+        .button.danger:hover {
+            background-color: #c82333;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.info {
+            background-color: #0d4f5c;
+            color: #9ee8f5;
+        }
+        .status.warning {
+            background-color: #5c4b1b;
+            color: #f5e79e;
+        }
+        .status.success {
+            background-color: #1b5e20;
+            color: #a5d6a7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Frontend Performance Profiler - Debug Lag Issues</h1>
+        
+        <div class="section">
+            <h2>📋 Integration Instructions</h2>
+            <div class="status info">
+                <strong>Purpose:</strong> Debug why 90Hz backend feels laggy but 50Hz feels smooth
+            </div>
+            
+            <h3>Method 1: Direct Browser Console</h3>
+            <div class="code">
+// 1. Open Viser frontend in browser (e.g., http://localhost:8080)
+// 2. Open Developer Console (F12)
+// 3. Copy and paste the entire frontend_performance_profiler.js content
+// 4. Start profiling:
+startFrontendProfiling();
+
+// 5. Run your robot replay at different speeds
+// 6. Stop profiling after 30-60 seconds:
+stopFrontendProfiling();
+            </div>
+            
+            <h3>Method 2: Inject via Script Tag</h3>
+            <div class="code">
+// Add this to your Viser frontend HTML:
+&lt;script src="profiling/frontend_performance_profiler.js">&lt;/script>
+&lt;script>
+    // Auto-start profiling when page loads
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            startFrontendProfiling();
+        }, 2000); // Wait 2s for Viser to initialize
+    });
+&lt;/script>
+            </div>
+            
+            <h3>Method 3: Bookmarklet (Quick Test)</h3>
+            <div class="code">
+// Create a browser bookmark with this JavaScript:
+javascript:(function(){
+    var script = document.createElement('script');
+    script.src = 'data:text/javascript,' + encodeURIComponent(`
+        // Paste frontend_performance_profiler.js content here
+    `);
+    document.head.appendChild(script);
+    setTimeout(() => startFrontendProfiling(), 1000);
+})();
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🧪 Test Controls</h2>
+            <div class="status warning">
+                <strong>Note:</strong> These controls work if you've loaded the profiler script
+            </div>
+            
+            <button class="button" onclick="testStartProfiling()">Start Frontend Profiling</button>
+            <button class="button danger" onclick="testStopProfiling()">Stop Frontend Profiling</button>
+            <button class="button" onclick="testExportData()">Export Performance Data</button>
+            <button class="button" onclick="simulateHighLoad()">Simulate High Load</button>
+            
+            <div id="status-display" class="status info" style="margin-top: 15px;">
+                Ready to start profiling...
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>📊 What the Profiler Measures</h2>
+            <ul>
+                <li><strong>WebSocket Receive Rate:</strong> Actual Hz of messages received from backend</li>
+                <li><strong>Visual Render Rate:</strong> Actual Hz of frames drawn by browser</li>
+                <li><strong>Frame Processing Time:</strong> Time to process each WebSocket message</li>
+                <li><strong>Frame Drops:</strong> Messages received but not rendered</li>
+                <li><strong>Queue Backlog:</strong> Messages waiting to be processed</li>
+                <li><strong>Long Tasks:</strong> JavaScript blocking browser rendering</li>
+                <li><strong>Memory Usage:</strong> JavaScript heap size and GC pauses</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>🎯 Expected Results</h2>
+            <div class="status success">
+                <strong>Hypothesis:</strong> 90Hz backend → Laggy because frontend can't keep up
+            </div>
+            
+            <h3>Scenario 1: Backend at 100Hz (laggy)</h3>
+            <div class="code">
+Expected Results:
+- WebSocket Rate: 100 Hz
+- Visual Rate: 30-50 Hz (can't keep up)
+- Processing Time: >20ms per frame (exceeds 60fps budget)
+- Frame Drops: High
+- Queue Size: Growing backlog
+
+Diagnosis: Frontend rendering bottleneck
+            </div>
+            
+            <h3>Scenario 2: Backend at 50Hz (smooth)</h3>
+            <div class="code">
+Expected Results:
+- WebSocket Rate: 50 Hz  
+- Visual Rate: 50 Hz (matches input)
+- Processing Time: <16ms per frame (within budget)
+- Frame Drops: Low
+- Queue Size: Stable
+
+Diagnosis: Frontend can handle this rate
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🔧 Troubleshooting</h2>
+            <div class="code">
+Problem: "WebSocket not found"
+Solution: Make sure Viser is running and connected
+
+Problem: "No performance data"
+Solution: Wait longer, ensure robot replay is active
+
+Problem: "Profiler not starting"
+Solution: Check browser console for errors
+
+Problem: "Metrics display not showing"
+Solution: Check for ad blockers or CSP restrictions
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>📈 Performance Analysis</h2>
+            <div class="status info">
+                The profiler will automatically analyze the results and provide:
+            </div>
+            <ul>
+                <li><strong>Rate Gap Analysis:</strong> Difference between data rate and visual rate</li>
+                <li><strong>Bottleneck Identification:</strong> Whether issue is processing or rendering</li>
+                <li><strong>Frame Budget Analysis:</strong> How much of 60fps budget is used</li>
+                <li><strong>Optimization Recommendations:</strong> Specific suggestions for improvement</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Load the frontend profiler -->
+    <script src="frontend_performance_profiler.js"></script>
+    
+    <!-- Test functions -->
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status-display');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        function testStartProfiling() {
+            try {
+                if (typeof startFrontendProfiling === 'function') {
+                    startFrontendProfiling();
+                    updateStatus('✅ Frontend profiling started! Check console for details.', 'success');
+                } else {
+                    updateStatus('❌ Frontend profiler not loaded. Check if script is included.', 'warning');
+                }
+            } catch (error) {
+                updateStatus(`❌ Error starting profiler: ${error.message}`, 'warning');
+            }
+        }
+        
+        function testStopProfiling() {
+            try {
+                if (typeof stopFrontendProfiling === 'function') {
+                    stopFrontendProfiling();
+                    updateStatus('✅ Frontend profiling stopped! Check console for comprehensive report.', 'success');
+                } else {
+                    updateStatus('❌ Frontend profiler not loaded.', 'warning');
+                }
+            } catch (error) {
+                updateStatus(`❌ Error stopping profiler: ${error.message}`, 'warning');
+            }
+        }
+        
+        function testExportData() {
+            try {
+                if (window.frontendProfiler && window.frontendProfiler.exportData) {
+                    window.frontendProfiler.exportData();
+                    updateStatus('✅ Performance data exported as JSON file.', 'success');
+                } else {
+                    updateStatus('❌ No profiler instance running. Start profiling first.', 'warning');
+                }
+            } catch (error) {
+                updateStatus(`❌ Error exporting data: ${error.message}`, 'warning');
+            }
+        }
+        
+        function simulateHighLoad() {
+            updateStatus('🔄 Simulating high CPU load for 5 seconds...', 'info');
+            
+            // Simulate heavy computation to test long task detection
+            const startTime = performance.now();
+            const duration = 5000; // 5 seconds
+            
+            function heavyComputation() {
+                const now = performance.now();
+                if (now - startTime < duration) {
+                    // Do some heavy computation
+                    for (let i = 0; i < 100000; i++) {
+                        Math.sqrt(Math.random() * 1000);
+                    }
+                    setTimeout(heavyComputation, 10);
+                } else {
+                    updateStatus('✅ High load simulation complete. Check profiler metrics.', 'success');
+                }
+            }
+            
+            heavyComputation();
+        }
+        
+        // Auto-detect if we're in a Viser environment
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (window.WebSocket && typeof window.WebSocket === 'function') {
+                    updateStatus('🟢 WebSocket detected - Ready for profiling', 'success');
+                } else {
+                    updateStatus('🟡 WebSocket not detected - May need to load Viser first', 'warning');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
