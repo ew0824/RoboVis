@@ -1,0 +1,52 @@
+{
+  "corrected_analysis": {
+    "timestamp": 1754085332.247788,
+    "data_files": [
+      "robot_status1.data.json",
+      "robot_status2.data.json"
+    ],
+    "methodology": "Fixed data file runs to eliminate replay restart artifacts"
+  },
+  "results": [
+    {
+      "downsampling_factor": 1,
+      "target_rate_hz": 500.0,
+      "actual_rate_hz": 181.56138203516963,
+      "consistency_percent": 53.35095845672652,
+      "avg_interval_ms": 5.507780486815125,
+      "std_interval_ms": 0.8159060577662833,
+      "timing_stability": 96.38107882386582,
+      "sample_count": 962
+    },
+    {
+      "downsampling_factor": 3,
+      "target_rate_hz": 166.66666666666666,
+      "actual_rate_hz": 158.37062076761208,
+      "consistency_percent": 85.3452169732537,
+      "avg_interval_ms": 6.315463367620241,
+      "std_interval_ms": 1.7230049822484061,
+      "timing_stability": 93.85845086108608,
+      "sample_count": 323
+    },
+    {
+      "downsampling_factor": 5,
+      "target_rate_hz": 100.0,
+      "actual_rate_hz": 91.46227356713801,
+      "consistency_percent": 87.9542415529445,
+      "avg_interval_ms": 10.933963498406994,
+      "std_interval_ms": 1.7121670617130713,
+      "timing_stability": 95.39747675402705,
+      "sample_count": 195
+    },
+    {
+      "downsampling_factor": 10,
+      "target_rate_hz": 50.0,
+      "actual_rate_hz": 45.624913200406695,
+      "consistency_percent": 85.32459712966342,
+      "avg_interval_ms": 21.919372282247743,
+      "std_interval_ms": 3.84107740289575,
+      "timing_stability": 93.53331531950977,
+      "sample_count": 99
+    }
+  ]
+}
