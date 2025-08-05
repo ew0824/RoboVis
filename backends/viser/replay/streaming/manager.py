@@ -39,8 +39,8 @@ import numpy as np
 import viser
 
 try:
-    from .parser import DataParser
-    from .joint_mapper import JointMapper
+    from ..parser import DataParser
+    from ..joint_mapper import JointMapper
     from .controller import StreamingController
 except ImportError as e:
     print(f"[ROBOT_streaming] Warning: Could not import robot data modules: {e}")

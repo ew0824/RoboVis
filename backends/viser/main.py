@@ -57,7 +57,8 @@ from backends.viser.urdf.urdf_manager import (
     create_smart_control_sliders
 )
 from backends.viser.stress_test import StressTestManager
-from backends.viser.streaming.streaming import create_streaming_manager
+from backends.viser.replay.streaming import create_streaming_manager  
+from backends.viser.replay.offline import create_offline_manager
 
 
 def main(
@@ -70,8 +71,10 @@ def main(
     stress_wave_freq: float = 0.3,
     stress_joints: Optional[int] = None,
     streaming: bool = False,
+    offline_replay: bool = False,
     robot_data: int = 1,
     downsample: int = 10,
+    offline_downsample: int = 5,
 ) -> None:
     """
     Main entry point for the Viser Multi-URDF Robot Visualization System.
@@ -148,6 +151,7 @@ def main(
     # Initialize optional modules based on command line flags
     stress_manager = None
     streaming_manager = None
+    offline_manager = None
     
     # Initialize stress testing if requested
     if stress:
@@ -170,6 +174,26 @@ def main(
             print(f"[VISER] ✅ Robot streaming system ready (data file: {robot_data})")
         else:
             print("[VISER] ❌ Robot streaming system failed to initialize")
+    
+    # Initialize offline replay if requested (NEW!)
+    if offline_replay:
+        print("[VISER] Initializing offline replay system...")
+        offline_manager = create_offline_manager(server, urdf_manager, robot_data, offline_downsample)
+        if offline_manager is not None:
+            offline_manager.set_slider_handles(slider_handles, joint_names)
+            
+            # Start async initialization with processing
+            import asyncio
+            async def init_offline():
+                await offline_manager.initialize_async(offline_downsample)
+                
+            # Run initialization in background
+            asyncio.create_task(init_offline())
+            
+            print(f"[VISER] ✅ Offline replay system initializing (data file: {robot_data}, downsample: {offline_downsample}x)")
+            print(f"[VISER] 🔄 Processing will complete in background for lag-free playback")
+        else:
+            print("[VISER] ❌ Offline replay system failed to initialize")
     
     # Add visibility controls
     print("[VISER] Adding visibility controls...")
@@ -215,6 +239,7 @@ def main(
     print(f"  - Collision meshes: {'✅' if load_collision_meshes else '❌'}")
     print(f"  - Stress testing: {'✅' if stress else '❌'}")
     print(f"  - Robot streaming: {'✅' if streaming and streaming_manager else '❌'}")
+    print(f"  - Offline replay: {'✅' if offline_replay and offline_manager else '❌'}")
     print(f"  - Telemetry: ✅ (port 8081)")
     print(f"  - Coordinate frames: ✅ (toggle in scene tree)")
     print()
@@ -231,7 +256,9 @@ def main(
         print("  4. Enable stress testing for performance analysis")
     if streaming and streaming_manager:
         print("  5. Use robot streaming controls for data playback")
-    print("  6. Monitor performance via telemetry WebSocket")
+    if offline_replay and offline_manager:
+        print("  6. Use offline replay controls for lag-free playback")
+    print("  7. Monitor performance via telemetry WebSocket")
     print()
     
     # Print module status
@@ -240,6 +267,7 @@ def main(
     print(f"  - urdf_manager.py: ✅ Active")
     print(f"  - stress_test.py: {'✅ Active' if stress else '⚪ Available'}")
     print(f"  - robot_streaming.py: {'✅ Active' if streaming and streaming_manager else '⚪ Available'}")
+    print(f"  - offline_replay.py: {'✅ Active' if offline_replay and offline_manager else '⚪ Available'}")
     print("="*60)
     
     # Main execution loop
@@ -255,6 +283,8 @@ def main(
             stress_manager.cleanup()
         if streaming_manager:
             streaming_manager.cleanup()
+        if offline_manager:
+            offline_manager.cleanup()
             
         print("[VISER] Goodbye! 👋")
 

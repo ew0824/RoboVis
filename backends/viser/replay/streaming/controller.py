@@ -6,8 +6,8 @@ Manages timeline, play/pause, and sequence ID navigation
 import time
 import threading
 from typing import Dict, List, Optional, Callable
-from .parser import DataParser
-from .joint_mapper import JointMapper
+from ..parser import DataParser
+from ..joint_mapper import JointMapper
 
 class StreamingController:
     """Simple streaming controller for demo purposes"""
