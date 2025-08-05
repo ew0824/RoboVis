@@ -81,6 +81,7 @@ class OfflineManager:
         # State tracking
         self.processing_complete = False
         self.initialization_complete = False
+        self.gui_ready = False  # Prevent premature GUI interactions
         
         # GUI elements (created dynamically)
         self.gui_elements = {}
@@ -143,6 +144,12 @@ class OfflineManager:
             
     def _create_processing_gui(self):
         """Create initial GUI showing processing progress."""
+        # Check if we're in unified mode - skip all GUI creation
+        if hasattr(self, 'unified_server'):
+            print("🎛️ [OFFLINE] Skipping processing GUI creation - using unified GUI")
+            return
+            
+        # Original standalone GUI creation
         with self.server.gui.add_folder("🔄 Offline Replay (Processing...)"):
             self.gui_elements['processing_status'] = self.server.gui.add_text(
                 "Status", 
@@ -156,7 +163,7 @@ class OfflineManager:
             
             self.gui_elements['processing_details'] = self.server.gui.add_text(
                 "Details", 
-                "📊 Preparing for lag-free playback..."
+                "📊 Preparing for lag-free playbook..."
             )
             
     async def _start_background_processing(self):
@@ -165,13 +172,16 @@ class OfflineManager:
         # Create data file path
         data_file = f"data/robot_status{self.robot_data}.data.json"
         
-        # Update status
-        self.gui_elements['processing_status'].value = "🏗️ Creating processor..."
+        # Update status (unified or standalone)
+        status_element = self.gui_elements.get('unified_status') or self.gui_elements.get('processing_status')
+        if status_element:
+            status_element.value = "🏗️ Creating processor..."
         
         try:
             # Create processor
             self.processor = OfflineProcessor(data_file, self.urdf_manager)
-            self.gui_elements['processing_status'].value = "⚡ Processing all data..."
+            if status_element:
+                status_element.value = "⚡ Processing all data..."
             
             # Run intensive processing in background
             processing_future = asyncio.create_task(self._run_processing_in_background())
@@ -187,24 +197,34 @@ class OfflineManager:
                 self.processing_complete = True
                 
                 # Update GUI with completion status
-                self.gui_elements['processing_status'].value = (
-                    f"✅ Processing Complete!"
-                )
-                self.gui_elements['processing_progress'].value = (
-                    f"📊 {stats['total_frames']} frames in {stats['processing_time']:.1f}s"
-                )
-                self.gui_elements['processing_details'].value = (
-                    f"💾 {stats['memory_usage_mb']:.1f}MB ready for lag-free playback"
-                )
+                if hasattr(self, 'unified_server') and 'unified_status' in self.gui_elements:
+                    # Unified mode - single status line
+                    self.gui_elements['unified_status'].value = (
+                        f"✅ Ready for lag-free playback ({stats['total_frames']} frames)"
+                    )
+                else:
+                    # Standalone mode - multiple status lines  
+                    if self.gui_elements.get('processing_status'):
+                        self.gui_elements['processing_status'].value = "✅ Processing Complete!"
+                    if self.gui_elements.get('processing_progress'):
+                        self.gui_elements['processing_progress'].value = (
+                            f"📊 {stats['total_frames']} frames in {stats['processing_time']:.1f}s"
+                        )
+                    if self.gui_elements.get('processing_details'):
+                        self.gui_elements['processing_details'].value = (
+                            f"💾 {stats['memory_usage_mb']:.1f}MB ready for lag-free playback"
+                        )
                 
                 print(f"✅ [OFFLINE] Background processing completed successfully")
                 
             else:
-                self.gui_elements['processing_status'].value = "❌ Processing failed"
+                if status_element:
+                    status_element.value = "❌ Processing failed"
                 
         except Exception as e:
             print(f"❌ [OFFLINE] Processing error: {e}")
-            self.gui_elements['processing_status'].value = f"❌ Error: {str(e)}"
+            if status_element:
+                status_element.value = f"❌ Error: {str(e)}"
             
     async def _run_processing_in_background(self):
         """Run the intensive processing in a background thread."""
@@ -239,6 +259,70 @@ class OfflineManager:
         if not self.controller:
             return
             
+        # Prevent duplicate playback GUI creation
+        if hasattr(self, '_playback_gui_created'):
+            print(f"🎛️ [OFFLINE] Playback GUI already exists - skipping creation")
+            return
+            
+        # Check if we're in unified mode
+        if hasattr(self, 'unified_server'):
+            print(f"🎛️ [OFFLINE] Adding playback controls to unified GUI")
+            
+            # Add controls to the unified folder using the stored reference
+            if hasattr(self, 'unified_folder'):
+                with self.unified_folder:
+                    # Add separator for offline playback controls
+                    self.unified_server.gui.add_markdown("### 🎮 Offline Playback Controls")
+                    
+                    # Primary playback controls
+                    self.gui_elements['play_button'] = self.unified_server.gui.add_button("▶️ Play")
+                    self.gui_elements['pause_button'] = self.unified_server.gui.add_button("⏸️ Pause")
+                    self.gui_elements['stop_button'] = self.unified_server.gui.add_button("🛑 Reset")
+                    
+                    # Advanced controls
+                    self.gui_elements['step_backward'] = self.unified_server.gui.add_button("⏪ Step Back")
+                    self.gui_elements['step_forward'] = self.unified_server.gui.add_button("⏩ Step Forward")
+                    
+                    # Frame-perfect seeking
+                    max_frames = self.processor.get_total_frames()
+                    self.gui_elements['frame_slider'] = self.unified_server.gui.add_slider(
+                        "Frame", 
+                        min=0, 
+                        max=max(1, max_frames - 1), 
+                        step=1, 
+                        initial_value=0
+                    )
+                    
+                    # Variable speed control  
+                    self.gui_elements['speed_slider'] = self.unified_server.gui.add_slider(
+                        "Speed", 
+                        min=0.1, 
+                        max=5.0, 
+                        step=0.1, 
+                        initial_value=1.0
+                    )
+                    
+                    # Update status displays for playback-ready state
+                    self.gui_elements['status_text'].value = "✅ Ready for lag-free playback"
+                    self.gui_elements['progress_text'].value = "0.0% (Frame 0)"
+                    
+                    # Add additional status display for playback timing
+                    self.gui_elements['time_text'] = self.unified_server.gui.add_text(
+                        "Duration",
+                        f"0.0s / {self.processor.get_duration_seconds():.1f}s"
+                    )
+                    
+                    # Wire up callbacks
+                    self._setup_gui_callbacks()
+                    
+                # Mark GUI as created to prevent duplicates
+                self._playback_gui_created = True
+                print(f"🎛️ [OFFLINE] Playback controls added to unified Robot Replay folder")
+            else:
+                print(f"⚠️ [OFFLINE] Unified folder reference not found")
+            return
+            
+        # Original standalone GUI creation
         with self.server.gui.add_folder("🎬 Offline Replay Controls"):
             
             # Primary playback controls
@@ -296,6 +380,61 @@ class OfflineManager:
             
         print(f"🎛️ [OFFLINE] Comprehensive GUI controls created")
         
+    def _on_process_button_click(self, _):
+        """Handle process button click to start user-initiated processing."""
+        # CRITICAL: Prevent automatic triggering during GUI initialization
+        if not self.gui_ready:
+            print(f"🔄 [OFFLINE] GUI not ready - ignoring spurious process button click")
+            return
+            
+        # Prevent multiple processing attempts
+        if self.processing_complete or hasattr(self, '_processing_started'):
+            print(f"🔄 [OFFLINE] Processing already started or completed")
+            return
+            
+        self._processing_started = True
+        print(f"🔄 [OFFLINE] User requested data processing - starting background processing...")
+        
+        # IMMEDIATELY remove/disable the process button to prevent duplicates
+        if 'process_button' in self.gui_elements:
+            # Remove the button from GUI
+            try:
+                self.gui_elements['process_button'].remove()
+                print(f"🔄 [OFFLINE] Process button removed to prevent duplicates")
+            except:
+                # If remove doesn't work, try to disable it
+                try:
+                    self.gui_elements['process_button'].disabled = True
+                    print(f"🔄 [OFFLINE] Process button disabled to prevent duplicates") 
+                except:
+                    print(f"🔄 [OFFLINE] Could not remove/disable process button")
+            
+            # Update status to show processing has started  
+            self.gui_elements['status_text'].value = "🔄 Processing data for lag-free playback..."
+            
+            # Add progress display
+            if hasattr(self, 'unified_folder') and hasattr(self, 'unified_server'):
+                with self.unified_folder:
+                    self.gui_elements['progress_text'] = self.unified_server.gui.add_text(
+                        "Progress",
+                        "⏳ Initializing processor..."
+                    )
+        
+        # Start the async initialization in background thread
+        import threading
+        def init_offline():
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self.initialize_async(self.downsample))
+            loop.close()
+            
+        # Run initialization in background thread
+        init_thread = threading.Thread(target=init_offline, daemon=True)
+        init_thread.start()
+        
+        print(f"🔄 [OFFLINE] Processing started in background thread")
+        
     def _setup_gui_callbacks(self):
         """Set up all GUI control callbacks."""
         
@@ -318,9 +457,11 @@ class OfflineManager:
             return
             
         speed = self.gui_elements['speed_slider'].value
-        direction = -1 if self.gui_elements['reverse_checkbox'].value else 1
+        # In unified mode, reverse_checkbox doesn't exist, so default to forward
+        direction = -1 if self.gui_elements.get('reverse_checkbox', {}).get('value', False) else 1
         
         self.controller.play(speed=speed, direction=direction)
+        print(f"🎬 [OFFLINE] Started lag-free forward playback at {speed}x speed")
         
     def _on_pause_click(self, _):
         """Handle pause button click."""
