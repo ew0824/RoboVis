@@ -285,10 +285,16 @@ class StreamingManager:
             self.streaming_controller.play()
             self.status_text.value = "Playing..."
             
+            # Start enhanced monitoring ONLY when user clicks play (prevents telemetry spam)
+            if not self.monitor_running:
+                self._start_enhanced_monitoring()
+            
             # Start monitoring playback status
             self._monitor_playback_status()
             
-            print("[ROBOT_streaming] Playback started")
+            print("[ROBOT_streaming] Playbook started - monitoring enabled")
+        else:
+            print("[ROBOT_streaming] Already playing")
     
     def _on_pause_button_click(self, _):
         """Handle pause button click to pause streaming."""
