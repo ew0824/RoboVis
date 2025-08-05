@@ -1,13 +1,13 @@
 """
 Robot Data Parser for Demo
-Loads robot_status.data.json and extracts joint positions for robot replay
+Loads robot_status.data.json and extracts joint positions for robot streaming
 """
 
 import json
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 
-class RobotDataParser:
+class DataParser:
     """Simple robot data parser for demo purposes"""
     
     def __init__(self, json_file: str = "data/robot_status_beta.data.json"):
@@ -157,7 +157,7 @@ def test_parser():
     print("=== TESTING ROBOT DATA PARSER ===")
     
     # Create parser
-    parser = RobotDataParser()
+    parser = DataParser()
     
     # Load and parse data
     parser.load_data()

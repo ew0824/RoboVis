@@ -1,5 +1,5 @@
 """
-Joint Mapper for Robot Replay Demo
+Joint Mapper for Robot streaming Demo
 Maps robot data parts to URDF joint names
 """
 

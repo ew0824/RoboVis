@@ -1,23 +1,23 @@
 """
-Simple Replay Controller for Robot Demo
+Simple streaming Controller for Robot Demo
 Manages timeline, play/pause, and sequence ID navigation
 """
 
 import time
 import threading
 from typing import Dict, List, Optional, Callable
-from robot_data_parser import RobotDataParser
-from joint_mapper import JointMapper
+from .parser import DataParser
+from .joint_mapper import JointMapper
 
-class SimpleReplayController:
-    """Simple replay controller for demo purposes"""
+class StreamingController:
+    """Simple streaming controller for demo purposes"""
     
     def __init__(self, json_file: str = "data/robot_status_beta.data.json", downsample_factor: int = 5):
-        self.parser = RobotDataParser(json_file)
+        self.parser = DataParser(json_file)
         self.mapper = JointMapper()
         self.downsample_factor = downsample_factor
         
-        # Replay state
+        # streaming state
         self.current_index = 0
         self.is_playing = False
         self.update_callback = None
@@ -30,8 +30,8 @@ class SimpleReplayController:
         self.parser.load_data()
         self.parser.parse_data(downsample_factor=downsample_factor)
         
-        print(f"[REPLAY] Initialized with {len(self.parser.parsed_data)} entries")
-        print(f"[REPLAY] Downsampling: {downsample_factor}x (500Hz → {500/downsample_factor:.0f}Hz)")
+        print(f"[streaming] Initialized with {len(self.parser.parsed_data)} entries")
+        print(f"[streaming] Downsampling: {downsample_factor}x (500Hz → {500/downsample_factor:.0f}Hz)")
         
     def set_update_callback(self, callback: Callable[[Dict], None]) -> None:
         """Set callback function that gets called with joint updates"""
@@ -58,10 +58,10 @@ class SimpleReplayController:
             if entry['sequence_id'] == sequence_id:
                 self.current_index = i
                 self._update_visualization()
-                print(f"[REPLAY] Jumped to sequence ID {sequence_id} (index {i})")
+                print(f"[streaming] Jumped to sequence ID {sequence_id} (index {i})")
                 return True
         
-        print(f"[REPLAY] Sequence ID {sequence_id} not found")
+        print(f"[streaming] Sequence ID {sequence_id} not found")
         return False
     
     def goto_index(self, index: int) -> bool:
@@ -71,16 +71,16 @@ class SimpleReplayController:
             self._update_visualization()
             entry = self.get_current_entry()
             seq_id = entry['sequence_id'] if entry else None
-            print(f"[REPLAY] Jumped to index {index} (sequence ID {seq_id})")
+            print(f"[streaming] Jumped to index {index} (sequence ID {seq_id})")
             return True
         
-        print(f"[REPLAY] Index {index} out of range")
+        print(f"[streaming] Index {index} out of range")
         return False
     
     def play(self) -> None:
         """Start playback"""
         if self.is_playing:
-            print("[REPLAY] Already playing")
+            print("[streaming] Already playing")
             return
         
         self.is_playing = True
@@ -90,12 +90,12 @@ class SimpleReplayController:
         self.play_thread = threading.Thread(target=self._playback_loop, daemon=True)
         self.play_thread.start()
         
-        print(f"[REPLAY] Started playback from index {self.current_index}")
+        print(f"[streaming] Started playback from index {self.current_index}")
     
     def pause(self) -> None:
         """Pause playback"""
         if not self.is_playing:
-            print("[REPLAY] Not currently playing")
+            print("[streaming] Not currently playing")
             return
         
         self.is_playing = False
@@ -104,14 +104,14 @@ class SimpleReplayController:
         if self.play_thread:
             self.play_thread.join(timeout=1.0)
         
-        print(f"[REPLAY] Paused at index {self.current_index}")
+        print(f"[streaming] Paused at index {self.current_index}")
     
     def stop(self) -> None:
         """Stop playback and reset to beginning"""
         self.pause()
         self.current_index = 0
         self._update_visualization()
-        print("[REPLAY] Stopped and reset to beginning")
+        print("[streaming] Stopped and reset to beginning")
     
     
     def _playback_loop(self) -> None:
@@ -121,7 +121,7 @@ class SimpleReplayController:
         effective_rate = original_rate / self.downsample_factor
         frame_time = 1.0 / effective_rate
         
-        print(f"[REPLAY] Real-time playback at {effective_rate:.1f}Hz (frame time: {frame_time*1000:.1f}ms)")
+        print(f"[streaming] Real-time playback at {effective_rate:.1f}Hz (frame time: {frame_time*1000:.1f}ms)")
         
         while self.is_playing and not self.stop_event.is_set():
             start_time = time.time()
@@ -134,7 +134,7 @@ class SimpleReplayController:
             
             # Check if we reached the end
             if self.current_index >= len(self.parser.parsed_data):
-                print("[REPLAY] Reached end of timeline - auto-resetting")
+                print("[streaming] Reached end of timeline - auto-resetting")
                 self.is_playing = False
                 self.current_index = 0  # Auto-reset to beginning
                 self._update_visualization()  # Update visualization to show reset position
@@ -178,19 +178,19 @@ class SimpleReplayController:
         info = self.get_timeline_info()
         status = "PLAYING" if self.is_playing else "PAUSED"
         
-        print(f"\n[REPLAY] === STATUS ===")
+        print(f"\n[streaming] === STATUS ===")
         print(f"Status: {status}")
         print(f"Index: {info['current_index']}/{info['total_entries']}")
         print(f"Sequence ID: {info['current_sequence_id']}")
         print(f"Duration: {info['duration_seconds']:.1f}s")
 
 
-def test_replay_controller():
-    """Test the replay controller"""
-    print("=== TESTING REPLAY CONTROLLER ===")
+def test_streaming_controller():
+    """Test the streaming controller"""
+    print("=== TESTING streaming CONTROLLER ===")
     
     # Create controller
-    controller = SimpleReplayController()
+    controller = StreamingController()
     
     # Set up a simple update callback
     def update_callback(joint_configs):
@@ -225,8 +225,8 @@ def test_replay_controller():
     controller.pause()
     
     controller.print_status()
-    print("\n[REPLAY] Test completed successfully!")
+    print("\n[streaming] Test completed successfully!")
 
 
 if __name__ == "__main__":
-    test_replay_controller()
+    test_streaming_controller()

@@ -1,13 +1,13 @@
 """
-Robot Replay Module for Viser Backend Robot Data Playback
+Robot streaming Module for Viser Backend Robot Data Playback
 
-This module provides robot data replay functionality for playing back
+This module provides robot data streaming functionality for playing back
 recorded robot motion data. It integrates with the robot data parser
 and joint mapper to provide smooth playback of real robot trajectories
 with full GUI controls and timeline scrubbing capabilities.
 
 Features:
-- Offline robot data replay from JSON files
+- Offline robot data streaming from JSON files
 - Play/pause/reset controls with timeline scrubbing
 - Progress tracking with time and percentage display
 - Configurable downsampling for performance optimization
@@ -15,16 +15,16 @@ Features:
 - Enhanced monitoring with real-time status updates
 
 Usage:
-    from robot_replay import RobotReplayManager
+    from robot_streaming import RobotStreamingManager
     
-    # Create replay manager
-    replay_manager = RobotReplayManager(server, urdf_manager, robot_data=1)
+    # Create streaming manager
+    streaming_manager = RobotStreamingManager(server, urdf_manager, robot_data=1)
     
     # Connect to slider system
-    replay_manager.set_slider_handles(slider_handles, joint_names)
+    streaming_manager.set_slider_handles(slider_handles, joint_names)
     
     # Add GUI controls
-    replay_manager.add_replay_controls()
+    streaming_manager.add_streaming_controls()
 """
 
 from __future__ import annotations
@@ -38,24 +38,21 @@ from typing import Dict, List, Optional
 import numpy as np
 import viser
 
-# Add replay directory to path for robot data modules
-sys.path.append(os.path.join(os.path.dirname(__file__), 'replay'))
-
 try:
-    from robot_data_parser import RobotDataParser
-    from joint_mapper import JointMapper
-    from replay_controller import SimpleReplayController
+    from .parser import DataParser
+    from .joint_mapper import JointMapper
+    from .controller import StreamingController
 except ImportError as e:
-    print(f"[ROBOT_REPLAY] Warning: Could not import robot data modules: {e}")
-    print("[ROBOT_REPLAY] Robot replay functionality will be disabled")
-    RobotDataParser = None
+    print(f"[ROBOT_streaming] Warning: Could not import robot data modules: {e}")
+    print("[ROBOT_streaming] Robot streaming functionality will be disabled")
+    DataParser = None
     JointMapper = None
-    SimpleReplayController = None
+    StreamingController = None
 
 
-class RobotReplayManager:
+class StreamingManager:
     """
-    Manages robot data replay functionality for the Viser backend.
+    Manages robot data streaming functionality for the Viser backend.
     
     This class integrates recorded robot motion data with the Viser visualization
     system, providing smooth playback with comprehensive GUI controls. It handles
@@ -66,8 +63,8 @@ class RobotReplayManager:
         server: Viser server instance for GUI controls
         urdf_manager: SmartUrdfManager instance for robot control
         robot_data: Robot data file number to load
-        downsample: Downsampling factor for replay data
-        replay_controller: SimpleReplayController instance for data playback
+        downsample: Downsampling factor for streaming data
+        streaming_controller: StreamingController instance for data playback
         slider_handles: List of GUI slider handles for unified control
         joint_names: List of joint names corresponding to sliders
         monitor_thread: Thread for continuous status monitoring
@@ -76,19 +73,19 @@ class RobotReplayManager:
     
     def __init__(self, server: viser.ViserServer, urdf_manager, robot_data: int = 1, downsample: int = 10):
         """
-        Initialize the robot replay manager.
+        Initialize the robot streaming manager.
         
         Args:
             server: Viser server instance
             urdf_manager: SmartUrdfManager instance
             robot_data: Robot data file number (1 or 2)
-            downsample: Downsampling factor for replay data optimization
+            downsample: Downsampling factor for streaming data optimization
         """
         self.server = server
         self.urdf_manager = urdf_manager
         self.robot_data = robot_data
         self.downsample = downsample
-        self.replay_controller = None
+        self.streaming_controller = None
         
         # GUI handles
         self.play_button = None
@@ -110,26 +107,26 @@ class RobotReplayManager:
         self.slider_handles = None
         self.joint_names = None
         
-        # Initialize replay controller
-        self._initialize_replay_controller()
+        # Initialize streaming controller
+        self._initialize_streaming_controller()
         
-        print(f"[ROBOT_REPLAY] Robot replay manager initialized (data file: {robot_data}, downsample: {downsample}x)")
+        print(f"[ROBOT_streaming] Robot streaming manager initialized (data file: {robot_data}, downsample: {downsample}x)")
         
-    def _initialize_replay_controller(self):
+    def _initialize_streaming_controller(self):
         """
-        Initialize the replay controller with robot data.
+        Initialize the streaming controller with robot data.
         
         This method loads the specified robot data file and creates a
-        SimpleReplayController instance. It handles missing dependencies
+        StreamingController instance. It handles missing dependencies
         gracefully and provides informative error messages.
         """
-        if SimpleReplayController is None:
-            print("[ROBOT_REPLAY] Error: Robot data modules not available")
-            print("[ROBOT_REPLAY] Please ensure robot_data_parser.py, joint_mapper.py, and replay_controller.py are available")
+        if StreamingController is None:
+            print("[ROBOT_streaming] Error: Robot data modules not available")
+            print("[ROBOT_streaming] Please ensure robot_data_parser.py, joint_mapper.py, and streaming_controller.py are available")
             return
             
         try:
-            print(f"[ROBOT_REPLAY] Initializing robot replay controller with data file {self.robot_data}...")
+            print(f"[ROBOT_streaming] Initializing robot streaming controller with data file {self.robot_data}...")
             
             # Construct data file path relative to project root
             from pathlib import Path
@@ -140,17 +137,17 @@ class RobotReplayManager:
                     break
                 project_root = project_root.parent
             data_file = str(project_root / f"data/robot_status{self.robot_data}.data.json")
-            self.replay_controller = SimpleReplayController(data_file, downsample_factor=self.downsample)
+            self.streaming_controller = StreamingController(data_file, downsample_factor=self.downsample)
             
             # Set up update callback
-            self.replay_controller.set_update_callback(self._on_replay_update)
+            self.streaming_controller.set_update_callback(self._on_streaming_update)
             
-            print(f"[ROBOT_REPLAY] Robot replay controller initialized successfully with {data_file}")
-            print(f"[ROBOT_REPLAY] Using downsample factor: {self.downsample}x")
+            print(f"[ROBOT_streaming] Robot streaming controller initialized successfully with {data_file}")
+            print(f"[ROBOT_streaming] Using downsample factor: {self.downsample}x")
             
         except Exception as e:
-            print(f"[ROBOT_REPLAY] Error initializing replay controller: {e}")
-            self.replay_controller = None
+            print(f"[ROBOT_streaming] Error initializing streaming controller: {e}")
+            self.streaming_controller = None
             
     def set_slider_handles(self, slider_handles: List, joint_names: List[str]):
         """
@@ -160,26 +157,26 @@ class RobotReplayManager:
             slider_handles: List of GUI slider handles
             joint_names: List of joint names corresponding to sliders
             
-        This method connects the robot replay system with the manual slider
-        system, enabling seamless switching between replay and manual control.
+        This method connects the robot streaming system with the manual slider
+        system, enabling seamless switching between streaming and manual control.
         """
         self.slider_handles = slider_handles
         self.joint_names = joint_names
-        print(f"[ROBOT_REPLAY] Connected to {len(slider_handles)} sliders for unified control")
+        print(f"[ROBOT_streaming] Connected to {len(slider_handles)} sliders for unified control")
         
-    def _on_replay_update(self, joint_configs: Dict[str, Dict[str, float]]):
+    def _on_streaming_update(self, joint_configs: Dict[str, Dict[str, float]]):
         """
-        Handle updates from the replay controller using the unified slider system.
+        Handle updates from the streaming controller using the unified slider system.
         
         Args:
             joint_configs: Dictionary mapping URDF names to joint configurations
             
-        This method processes replay data and updates the robot visualization
+        This method processes streaming data and updates the robot visualization
         through the unified slider system. This ensures consistency between
-        replay and manual control modes.
+        streaming and manual control modes.
         """
         if not self.slider_handles:
-            print("[ROBOT_REPLAY] Warning: No slider handles connected")
+            print("[ROBOT_streaming] Warning: No slider handles connected")
             return
             
         try:
@@ -208,13 +205,13 @@ class RobotReplayManager:
                     slider.value = float(full_config[i])
                     
         except Exception as e:
-            print(f"[ROBOT_REPLAY] Error in unified replay update: {e}")
+            print(f"[ROBOT_streaming] Error in unified streaming update: {e}")
             import traceback
             traceback.print_exc()
             
-    def add_replay_controls(self):
+    def add_streaming_controls(self):
         """
-        Add robot replay controls to the Viser GUI.
+        Add robot streaming controls to the Viser GUI.
         
         Creates a comprehensive set of controls including:
         - Play/pause/reset buttons
@@ -223,19 +220,19 @@ class RobotReplayManager:
         - Real-time monitoring information
         
         The controls are positioned in a dedicated folder and provide
-        intuitive access to all replay functionality.
+        intuitive access to all streaming functionality.
         """
-        if self.replay_controller is None:
-            print("[ROBOT_REPLAY] Cannot add controls - replay controller not initialized")
+        if self.streaming_controller is None:
+            print("[ROBOT_streaming] Cannot add controls - streaming controller not initialized")
             return
         
         # Get timeline info for initial display
-        info = self.replay_controller.get_timeline_info()
+        info = self.streaming_controller.get_timeline_info()
         total_entries = info['total_entries']
         duration = info['duration_seconds']
         
-        # Create replay controls
-        with self.server.gui.add_folder("Robot Replay"):
+        # Create streaming controls
+        with self.server.gui.add_folder("Robot streaming"):
             # Control buttons with intuitive icons
             self.play_button = self.server.gui.add_button("▶️ Play")
             self.pause_button = self.server.gui.add_button("⏸️ Pause")  
@@ -253,7 +250,7 @@ class RobotReplayManager:
             # Status information displays
             self.status_text = self.server.gui.add_text(
                 "Status",
-                initial_value="Ready - Click Play to start replay"
+                initial_value="Ready - Click Play to start streaming"
             )
             
             self.time_progress_text = self.server.gui.add_text(
@@ -275,46 +272,46 @@ class RobotReplayManager:
         # Start continuous monitoring for enhanced info
         self._start_enhanced_monitoring()
         
-        print("[ROBOT_REPLAY] Robot replay controls added to GUI")
-        print(f"[ROBOT_REPLAY] Loaded {total_entries} data points spanning {duration:.1f}s")
+        print("[ROBOT_streaming] Robot streaming controls added to GUI")
+        print(f"[ROBOT_streaming] Loaded {total_entries} data points spanning {duration:.1f}s")
         
     def _on_play_button_click(self, _):
-        """Handle play button click to start/resume replay."""
-        if self.replay_controller is None:
+        """Handle play button click to start/resume streaming."""
+        if self.streaming_controller is None:
             return
             
-        if not self.replay_controller.is_playing:
+        if not self.streaming_controller.is_playing:
             # Start playing
-            self.replay_controller.play()
+            self.streaming_controller.play()
             self.status_text.value = "Playing..."
             
             # Start monitoring playback status
             self._monitor_playback_status()
             
-            print("[ROBOT_REPLAY] Playback started")
+            print("[ROBOT_streaming] Playback started")
     
     def _on_pause_button_click(self, _):
-        """Handle pause button click to pause replay."""
-        if self.replay_controller is None:
+        """Handle pause button click to pause streaming."""
+        if self.streaming_controller is None:
             return
             
-        if self.replay_controller.is_playing:
+        if self.streaming_controller.is_playing:
             # Pause playback
-            self.replay_controller.pause()
+            self.streaming_controller.pause()
             self.status_text.value = "Paused"
             
-            print("[ROBOT_REPLAY] Playback paused")
+            print("[ROBOT_streaming] Playback paused")
     
     def _on_reset_button_click(self, _):
         """Handle reset button click to return to beginning."""
-        if self.replay_controller is None:
+        if self.streaming_controller is None:
             return
             
         # Stop any playing playback and reset to beginning
-        self.replay_controller.stop()
-        self.status_text.value = "Ready - Click Play to start replay"
+        self.streaming_controller.stop()
+        self.status_text.value = "Ready - Click Play to start streaming"
         
-        print("[ROBOT_REPLAY] Playback reset to beginning")
+        print("[ROBOT_streaming] Playback reset to beginning")
     
     def _on_timeline_change(self, _):
         """
@@ -324,7 +321,7 @@ class RobotReplayManager:
         the slider. It automatically pauses playback during scrubbing to
         provide responsive seeking behavior.
         """
-        if self.replay_controller is None:
+        if self.streaming_controller is None:
             return
             
         # Avoid callback loops when we're updating the slider programmatically
@@ -332,13 +329,13 @@ class RobotReplayManager:
             return
             
         # Pause playback when user scrubs the timeline
-        was_playing = self.replay_controller.is_playing
+        was_playing = self.streaming_controller.is_playing
         if was_playing:
-            self.replay_controller.pause()
+            self.streaming_controller.pause()
         
         # Jump to the selected frame
         frame_index = int(self.timeline_slider.value)
-        self.replay_controller.goto_index(frame_index)
+        self.streaming_controller.goto_index(frame_index)
         
         # Update status
         if was_playing:
@@ -346,7 +343,7 @@ class RobotReplayManager:
         else:
             self.status_text.value = "Paused"
         
-        print(f"[ROBOT_REPLAY] Timeline scrubbed to frame {frame_index}")
+        print(f"[ROBOT_streaming] Timeline scrubbed to frame {frame_index}")
         
     def _monitor_playback_status(self):
         """
@@ -356,15 +353,15 @@ class RobotReplayManager:
         and update the GUI status when playback completes naturally.
         """
         def monitor():
-            while self.replay_controller and self.replay_controller.is_playing:
+            while self.streaming_controller and self.streaming_controller.is_playing:
                 time.sleep(0.1)
             
             # Playback finished - update status based on position
-            if self.replay_controller and not self.replay_controller.is_playing:
-                info = self.replay_controller.get_timeline_info()
+            if self.streaming_controller and not self.streaming_controller.is_playing:
+                info = self.streaming_controller.get_timeline_info()
                 if info['current_index'] == 0:
                     # Reset to beginning after completion
-                    self.status_text.value = "Ready - Click Play to start replay"
+                    self.status_text.value = "Ready - Click Play to start streaming"
                 elif info['current_index'] >= info['total_entries'] - 1:
                     self.status_text.value = "Playback Complete"
                 else:
@@ -388,10 +385,10 @@ class RobotReplayManager:
         self.monitor_running = True
         
         def enhanced_monitor():
-            while self.monitor_running and self.replay_controller:
+            while self.monitor_running and self.streaming_controller:
                 try:
                     # Get current timeline info
-                    info = self.replay_controller.get_timeline_info()
+                    info = self.streaming_controller.get_timeline_info()
                     current_index = info['current_index']
                     total_entries = info['total_entries']
                     duration_seconds = info['duration_seconds']
@@ -418,7 +415,7 @@ class RobotReplayManager:
                         self.updating_timeline_slider = False
                     
                     # Update status based on controller state
-                    if self.replay_controller.is_playing:
+                    if self.streaming_controller.is_playing:
                         if self.status_text and self.status_text.value != "Playing...":
                             self.status_text.value = "Playing..."
                     else:
@@ -433,36 +430,36 @@ class RobotReplayManager:
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    print(f"[ROBOT_REPLAY] Error in enhanced monitor: {e}")
+                    print(f"[ROBOT_streaming] Error in enhanced monitor: {e}")
                     time.sleep(0.5)
         
         # Start monitoring in a separate thread
         self.monitor_thread = threading.Thread(target=enhanced_monitor, daemon=True)
         self.monitor_thread.start()
         
-        print("[ROBOT_REPLAY] Enhanced monitoring started")
+        print("[ROBOT_streaming] Enhanced monitoring started")
         
     def _stop_enhanced_monitoring(self):
         """Stop the enhanced monitoring thread."""
         self.monitor_running = False
         if self.monitor_thread:
             self.monitor_thread.join(timeout=1.0)
-        print("[ROBOT_REPLAY] Enhanced monitoring stopped")
+        print("[ROBOT_streaming] Enhanced monitoring stopped")
         
-    def get_replay_status(self) -> dict:
+    def get_streaming_status(self) -> dict:
         """
-        Get current replay status information.
+        Get current streaming status information.
         
         Returns:
-            Dictionary with replay status including:
-            - is_available: Whether replay functionality is available
-            - is_playing: Whether replay is currently playing
+            Dictionary with streaming status including:
+            - is_available: Whether streaming functionality is available
+            - is_playing: Whether streaming is currently playing
             - current_time: Current playback time in seconds
             - total_time: Total duration in seconds
             - progress: Progress percentage (0-100)
             - data_file: Robot data file being used
         """
-        if self.replay_controller is None:
+        if self.streaming_controller is None:
             return {
                 "is_available": False,
                 "is_playing": False,
@@ -472,7 +469,7 @@ class RobotReplayManager:
                 "data_file": f"robot_status{self.robot_data}.data.json"
             }
             
-        info = self.replay_controller.get_timeline_info()
+        info = self.streaming_controller.get_timeline_info()
         current_index = info['current_index']
         total_entries = info['total_entries']
         duration_seconds = info['duration_seconds']
@@ -486,7 +483,7 @@ class RobotReplayManager:
         
         return {
             "is_available": True,
-            "is_playing": self.replay_controller.is_playing,
+            "is_playing": self.streaming_controller.is_playing,
             "current_time": current_time,
             "total_time": duration_seconds,
             "progress": progress_percentage,
@@ -502,16 +499,16 @@ class RobotReplayManager:
         This method should be called when shutting down to ensure
         all threads are properly terminated and resources are cleaned up.
         """
-        print("[ROBOT_REPLAY] Cleaning up robot replay resources")
+        print("[ROBOT_streaming] Cleaning up robot streaming resources")
         self._stop_enhanced_monitoring()
         
-        if self.replay_controller:
-            self.replay_controller.stop()
+        if self.streaming_controller:
+            self.streaming_controller.stop()
 
 
-def create_robot_replay_manager(server: viser.ViserServer, urdf_manager, robot_data: int = 1, downsample: int = 10) -> Optional[RobotReplayManager]:
+def create_streaming_manager(server: viser.ViserServer, urdf_manager, robot_data: int = 1, downsample: int = 10) -> Optional[StreamingManager]:
     """
-    Factory function to create a RobotReplayManager instance.
+    Factory function to create a StreamingManager instance.
     
     Args:
         server: Viser server instance
@@ -520,17 +517,17 @@ def create_robot_replay_manager(server: viser.ViserServer, urdf_manager, robot_d
         downsample: Downsampling factor for performance optimization
         
     Returns:
-        RobotReplayManager instance if successful, None if dependencies missing
+        StreamingManager instance if successful, None if dependencies missing
         
-    This factory function provides a convenient way to create a robot replay
+    This factory function provides a convenient way to create a streaming
     manager while handling missing dependencies gracefully.
     """
-    if SimpleReplayController is None:
-        print("[ROBOT_REPLAY] Cannot create robot replay manager - dependencies missing")
+    if StreamingController is None:
+        print("[ROBOT_streaming] Cannot create streaming manager - dependencies missing")
         return None
         
     try:
-        return RobotReplayManager(server, urdf_manager, robot_data, downsample)
+        return StreamingManager(server, urdf_manager, robot_data, downsample)
     except Exception as e:
-        print(f"[ROBOT_REPLAY] Error creating robot replay manager: {e}")
+        print(f"[ROBOT_streaming] Error creating streaming manager: {e}")
         return None

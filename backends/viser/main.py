@@ -8,7 +8,7 @@ robot visualization and control platform with the following features:
 - Multi-URDF robot loading and visualization
 - Real-time telemetry and performance monitoring
 - High-frequency stress testing capabilities
-- Robot data replay functionality
+- Robot data streaming functionality
 - Coordinate frame visualization
 - Smart joint filtering and control
 
@@ -18,7 +18,7 @@ functionality contained in its own module:
 - telemetry.py: WebSocket-based performance monitoring
 - urdf_manager.py: URDF loading and multi-robot management
 - stress_test.py: High-frequency performance stress testing
-- robot_replay.py: Robot data playback and replay
+- robot_streaming.py: Robot data playback and streaming
 
 Usage:
     # Basic multi-URDF visualization
@@ -27,31 +27,37 @@ Usage:
     # With stress testing
     python backends/viser/viser.py --workcell workcell_alpha_2 --stress
     
-    # With robot replay
-    python backends/viser/viser.py --workcell workcell_alpha_2 --replay --robot_data 1
+    # With robot streaming
+    python backends/viser/viser.py --workcell workcell_alpha_2 --streaming --robot_data 1
     
     # Combined functionality
-    python backends/viser/viser.py --workcell workcell_alpha_2 --stress --replay
+    python backends/viser/viser.py --workcell workcell_alpha_2 --stress --streaming
 """
 
 from __future__ import annotations
 
+import sys
+import os
 import time
 from typing import Optional
 
 import tyro
 import viser
 
+# Add project root to Python path for absolute imports
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+
 # Import our refactored modules
-from telemetry import start_telemetry_server
-from urdf_manager import (
+from backends.viser.telemetry import start_telemetry_server
+from backends.viser.urdf.urdf_manager import (
     SmartUrdfManager,
     discover_workcell_urdfs,
     deduplicate_urdfs,
     create_smart_control_sliders
 )
-from stress_test import StressTestManager
-from robot_replay import create_robot_replay_manager
+from backends.viser.stress_test import StressTestManager
+from backends.viser.streaming.streaming import create_streaming_manager
 
 
 def main(
@@ -63,7 +69,7 @@ def main(
     stress_amplitude: float = 0.3,
     stress_wave_freq: float = 0.3,
     stress_joints: Optional[int] = None,
-    replay: bool = False,
+    streaming: bool = False,
     robot_data: int = 1,
     downsample: int = 10,
 ) -> None:
@@ -79,14 +85,14 @@ def main(
         stress_amplitude: Stress test amplitude in radians
         stress_wave_freq: Stress test wave frequency
         stress_joints: Number of joints to stress test (None = all)
-        replay: Enable robot replay functionality
+        streaming: Enable robot streaming functionality
         robot_data: Robot data file number (1 or 2)
-        downsample: Downsampling factor for replay data
+        downsample: Downsampling factor for streaming data
     """
     
     print("🚀 [VISER] Starting Viser Multi-URDF Robot Visualization System")
     print(f"[VISER] Workcell: {workcell}")
-    print(f"[VISER] Features: Stress={stress}, Replay={replay}")
+    print(f"[VISER] Features: Stress={stress}, streaming={streaming}")
     
     # Initialize Viser server
     server = viser.ViserServer(
@@ -141,7 +147,7 @@ def main(
     
     # Initialize optional modules based on command line flags
     stress_manager = None
-    replay_manager = None
+    streaming_manager = None
     
     # Initialize stress testing if requested
     if stress:
@@ -154,16 +160,16 @@ def main(
         stress_manager.add_stress_controls()
         print(f"[VISER] ✅ Stress testing system ready ({stress_hz:.1f}Hz)")
     
-    # Initialize robot replay if requested
-    if replay:
-        print("[VISER] Initializing robot replay system...")
-        replay_manager = create_robot_replay_manager(server, urdf_manager, robot_data, downsample)
-        if replay_manager is not None:
-            replay_manager.set_slider_handles(slider_handles, joint_names)
-            replay_manager.add_replay_controls()
-            print(f"[VISER] ✅ Robot replay system ready (data file: {robot_data})")
+    # Initialize robot streaming if requested
+    if streaming:
+        print("[VISER] Initializing robot streaming system...")
+        streaming_manager = create_streaming_manager(server, urdf_manager, robot_data, downsample)
+        if streaming_manager is not None:
+            streaming_manager.set_slider_handles(slider_handles, joint_names)
+            streaming_manager.add_streaming_controls()
+            print(f"[VISER] ✅ Robot streaming system ready (data file: {robot_data})")
         else:
-            print("[VISER] ❌ Robot replay system failed to initialize")
+            print("[VISER] ❌ Robot streaming system failed to initialize")
     
     # Add visibility controls
     print("[VISER] Adding visibility controls...")
@@ -208,7 +214,7 @@ def main(
     print(f"  - Visual meshes: {'✅' if load_meshes else '❌'}")
     print(f"  - Collision meshes: {'✅' if load_collision_meshes else '❌'}")
     print(f"  - Stress testing: {'✅' if stress else '❌'}")
-    print(f"  - Robot replay: {'✅' if replay and replay_manager else '❌'}")
+    print(f"  - Robot streaming: {'✅' if streaming and streaming_manager else '❌'}")
     print(f"  - Telemetry: ✅ (port 8081)")
     print(f"  - Coordinate frames: ✅ (toggle in scene tree)")
     print()
@@ -223,8 +229,8 @@ def main(
     print("  3. Use visibility controls to show/hide meshes")
     if stress:
         print("  4. Enable stress testing for performance analysis")
-    if replay and replay_manager:
-        print("  5. Use robot replay controls for data playback")
+    if streaming and streaming_manager:
+        print("  5. Use robot streaming controls for data playback")
     print("  6. Monitor performance via telemetry WebSocket")
     print()
     
@@ -233,7 +239,7 @@ def main(
     print(f"  - telemetry.py: ✅ Active")
     print(f"  - urdf_manager.py: ✅ Active")
     print(f"  - stress_test.py: {'✅ Active' if stress else '⚪ Available'}")
-    print(f"  - robot_replay.py: {'✅ Active' if replay and replay_manager else '⚪ Available'}")
+    print(f"  - robot_streaming.py: {'✅ Active' if streaming and streaming_manager else '⚪ Available'}")
     print("="*60)
     
     # Main execution loop
@@ -247,8 +253,8 @@ def main(
         # Clean up modules
         if stress_manager:
             stress_manager.cleanup()
-        if replay_manager:
-            replay_manager.cleanup()
+        if streaming_manager:
+            streaming_manager.cleanup()
             
         print("[VISER] Goodbye! 👋")
 
