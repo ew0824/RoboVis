@@ -454,6 +454,76 @@ class SmartUrdfManager:
                     if urdf_name in self.coordinate_frames:
                         update_urdf_coordinate_frames(urdf, self.coordinate_frames[urdf_name], scale=1.0)
                     
+    def update_specific_urdf(self, urdf_name: str, joint_config: Dict[str, float]) -> bool:
+        """
+        Efficiently update a specific URDF with joint configuration.
+        
+        This method is optimized for streaming use cases where individual URDFs
+        need to be updated without the overhead of converting to/from unified arrays.
+        
+        Args:
+            urdf_name: Name of the URDF to update
+            joint_config: Dictionary mapping joint names to values
+            
+        Returns:
+            True if update successful, False if URDF not found
+        """
+        # Find the URDF configuration
+        target_config = None
+        for config in self.urdf_configs:
+            if config["name"] == urdf_name:
+                target_config = config
+                break
+        
+        if target_config is None:
+            print(f"[URDF_MANAGER] ❌ URDF '{urdf_name}' not found")
+            return False
+        
+        viser_urdf = target_config["viser_urdf"]
+        urdf = target_config["urdf"]
+        
+        try:
+            # Get all actuated joints for this URDF (in the order ViserUrdf expects)
+            all_actuated_joints = viser_urdf.get_actuated_joint_limits()
+            
+            if not all_actuated_joints:
+                print(f"[URDF_MANAGER] No actuated joints found for {urdf_name}")
+                return True  # Not an error, just no joints to update
+            
+            # Create configuration array in the correct order
+            cfg_array = []
+            joints_updated = 0
+            
+            for joint_name in all_actuated_joints.keys():
+                if joint_name in joint_config:
+                    # Use provided value
+                    cfg_array.append(joint_config[joint_name])
+                    joints_updated += 1
+                else:
+                    # Use default/center value for joints not provided
+                    lower, upper = all_actuated_joints[joint_name]
+                    if lower is not None and upper is not None:
+                        default_val = (lower + upper) / 2.0
+                    else:
+                        default_val = 0.0
+                    cfg_array.append(default_val)
+            
+            # Update the ViserUrdf
+            if cfg_array:
+                viser_urdf.update_cfg(np.array(cfg_array, dtype=np.float32))
+                
+                # Update coordinate frames for this URDF
+                if urdf_name in self.coordinate_frames:
+                    update_urdf_coordinate_frames(urdf, self.coordinate_frames[urdf_name], scale=1.0)
+                
+                print(f"[URDF_MANAGER] ✅ Updated {urdf_name}: {joints_updated}/{len(all_actuated_joints)} joints")
+            
+            return True
+            
+        except Exception as e:
+            print(f"[URDF_MANAGER] ❌ Error updating {urdf_name}: {e}")
+            return False
+    
     def get_initial_configuration(self) -> np.ndarray:
         """
         Get initial joint configuration for meaningful joints only.

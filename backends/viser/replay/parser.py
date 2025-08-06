@@ -32,11 +32,13 @@ class DataParser:
         if self.raw_data is None:
             self.load_data()
         
-        print(f"[PARSER] Parsing data with downsample factor {downsample_factor}")
+        print(f"[DEBUG] DataParser.parse_data() called with downsample_factor={downsample_factor}")
+        print(f"[DEBUG] Raw data length: {len(self.raw_data) if self.raw_data else 0}")
         
         # Downsample the data
         downsampled_data = self.raw_data[::downsample_factor]
         
+        print(f"[DEBUG] After downsampling: {len(downsampled_data)} entries")
         print(f"[PARSER] Downsampled from {len(self.raw_data)} to {len(downsampled_data)} entries")
         
         # Parse each entry

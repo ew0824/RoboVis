@@ -179,6 +179,8 @@ class Record3DControls:
         
         # State tracking
         self.is_playing = False
+        self.should_stop_monitoring = False
+        self.monitor_thread: Optional[threading.Thread] = None
         
     def create_controls(self, total_frames: int) -> Dict[str, Any]:
         """
@@ -336,7 +338,8 @@ class Record3DControls:
         """Handle timeline scrubbing with atomic updates."""
         frame_index = int(self.controls['timeline_slider'].value)
         self.playback_engine._atomic_frame_update(frame_index)
-        self._update_displays()
+        # Don't call _update_displays() here to prevent recursion
+        self._update_displays_except_slider()
         
     def _on_fps_preset(self, _) -> None:
         """Handle FPS preset selection (Record3D style)."""
@@ -383,6 +386,26 @@ class Record3DControls:
         # Update timeline position
         self.controls['timeline_slider'].value = current
         
+    def _update_displays_except_slider(self) -> None:
+        """Update displays without touching timeline slider to prevent recursion."""
+        status = self.controller.get_status()
+        
+        # Update frame counter
+        current = status['current_frame']
+        total = status['total_frames']
+        self.controls['frame_counter'].value = f"{current} / {total}"
+        
+        # Update time display (Record3D format)
+        current_time = status['current_time_seconds']
+        total_time = status['total_duration_seconds']
+        self.controls['time_display'].value = self._format_time_display(current_time, total_time)
+        
+        # Update progress
+        progress = status['progress_percentage']
+        self.controls['progress'].value = f"{progress:.1f}%"
+        
+        # DON'T update timeline slider to prevent recursion
+        
     def _format_time_display(self, current_seconds: float, total_seconds: float) -> str:
         """Format time display in Record3D style (mm:ss format)."""
         def format_seconds(seconds):
@@ -395,17 +418,29 @@ class Record3DControls:
     def start_monitoring(self) -> None:
         """Start monitoring thread for real-time display updates."""
         def monitor():
-            while True:
-                if self.playback_engine.is_enhanced_playing():
-                    self._update_displays()
+            while not self.should_stop_monitoring:
+                try:
+                    if self.playback_engine.is_enhanced_playing():
+                        self._update_displays()
+                except Exception as e:
+                    print(f"[RECORD3D] Monitor error: {e}")
                 time.sleep(0.1)  # 10Hz updates
+            print("[RECORD3D] Monitor thread ended")
                 
-        monitor_thread = threading.Thread(target=monitor, daemon=True)
-        monitor_thread.start()
+        self.should_stop_monitoring = False
+        self.monitor_thread = threading.Thread(target=monitor, daemon=True)
+        self.monitor_thread.start()
         
     def cleanup(self) -> None:
         """Clean up enhanced controls."""
         print("[RECORD3D] Cleaning up enhanced controls")
+        
+        # Stop monitoring thread
+        self.should_stop_monitoring = True
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.monitor_thread.join(timeout=0.5)
+        
+        # Stop playback engine
         self.playback_engine.stop_enhanced_playback()
 
 

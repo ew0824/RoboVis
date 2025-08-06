@@ -167,6 +167,12 @@ def main(
         print("[VISER] Initializing unified robot replay system...")
         
         replay_system = create_replay_system(server, urdf_manager)
+        
+        print(f"[DEBUG] main.py calling replay_system.setup() with:")
+        print(f"[DEBUG]   robot_data: {robot_data}")
+        print(f"[DEBUG]   streaming_downsample (downsample): {downsample}")
+        print(f"[DEBUG]   offline_downsample: {offline_downsample}")
+        
         success = replay_system.setup(
             robot_data=robot_data,
             streaming_downsample=downsample,

@@ -25,6 +25,10 @@ class StreamingController(BaseController):
         """Initialize streaming controller with data file."""
         super().__init__()
         
+        print(f"[DEBUG] StreamingController.__init__() called with:")
+        print(f"[DEBUG]   json_file: {json_file}")
+        print(f"[DEBUG]   downsample_factor: {downsample_factor}")
+        
         self.json_file = json_file
         self.downsample_factor = downsample_factor
         
@@ -46,6 +50,10 @@ class StreamingController(BaseController):
         try:
             downsample_factor = kwargs.get('downsample_factor', 5)
             
+            print(f"[DEBUG] _initialize_data() called with:")
+            print(f"[DEBUG]   data_source: {data_source}")
+            print(f"[DEBUG]   downsample_factor from kwargs: {downsample_factor}")
+            
             # Load and parse data
             self.parser.load_data()
             self.parser.parse_data(downsample_factor=downsample_factor)
@@ -54,6 +62,8 @@ class StreamingController(BaseController):
             self.total_frames = len(self.parser.parsed_data)
             timeline_info = self.parser.get_timeline_info()
             self.duration_seconds = timeline_info['duration_seconds']
+            
+            print(f"[DEBUG] After parsing, total_frames = {self.total_frames}")
             
             return True
         except Exception as e:
