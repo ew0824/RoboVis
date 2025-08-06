@@ -57,7 +57,7 @@ from backends.viser.urdf.urdf_manager import (
     create_smart_control_sliders
 )
 from backends.viser.stress_test import StressTestManager
-from backends.viser.replay.replay import create_unified_replay_system
+from backends.viser.replay import create_replay_system
 
 
 def main(
@@ -71,8 +71,8 @@ def main(
     stress_joints: Optional[int] = None,
     replay: bool = False,
     robot_data: int = 1,
-    downsample: int = 10,
-    offline_downsample: int = 5,
+    downsample: int = 1,
+    offline_downsample: int = 1,
 ) -> None:
     """
     Main entry point for the Viser Multi-URDF Robot Visualization System.
@@ -166,13 +166,11 @@ def main(
     if replay:
         print("[VISER] Initializing unified robot replay system...")
         
-        replay_system = create_unified_replay_system(server, urdf_manager)
+        replay_system = create_replay_system(server, urdf_manager)
         success = replay_system.setup(
             robot_data=robot_data,
             streaming_downsample=downsample,
-            offline_downsample=offline_downsample,
-            slider_handles=slider_handles,
-            joint_names=joint_names
+            offline_downsample=offline_downsample
         )
         
         if success:

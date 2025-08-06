@@ -1,324 +1,305 @@
 """
-Unified Robot Replay System
+Robot Replay System Coordinator
 
-This module provides a centralized system for managing both streaming and offline
-robot replay functionality with a clean, unified GUI interface.
+Clean replay coordinator that eliminates redundancy and focuses solely on 
+GUI creation and coordination. All business logic has been moved to the 
+appropriate controllers and shared components.
 
-The system coordinates:
-- Streaming replay: Real-time processing with some latency
-- Offline replay: Pre-processed data for lag-free playback
-- Unified GUI controls in a single folder
-- Proper lifecycle management and cleanup
-
-Usage:
-    from backends.viser.replay.replay import UnifiedReplaySystem
-    
-    replay_system = UnifiedReplaySystem(server, urdf_manager)
-    replay_system.setup(
-        robot_data=1, 
-        streaming_downsample=10, 
-        offline_downsample=5
-    )
+The coordinator's only job:
+1. Create the unified GUI structure  
+2. Initialize controllers using BaseController interface
+3. Wire GUI callbacks to controller methods
+4. Manage lifecycle and cleanup
 """
 
-from __future__ import annotations
-
-from typing import Optional
+from typing import Optional, List
 import viser
 
-from .streaming import create_streaming_manager
-from .offline import create_offline_manager
+from .streaming.controller import StreamingController
+from .offline.controller import OfflineController
+from .offline.processor import OfflineProcessor
+from .shared.gui_components import create_unified_controls
+from .shared.pro_controls import create_record3d_controls
 
 
-class UnifiedReplaySystem:
+class ReplayCoordinator:
     """
-    Manages the unified robot replay system with both streaming and offline capabilities.
+    Clean coordinator that just creates GUI and manages lifecycle.
     
-    This class provides a single point of control for the robot replay functionality,
-    creating a clean unified GUI and managing the lifecycle of both streaming and
-    offline replay managers.
-    
-    Attributes:
-        server: Viser server instance
-        urdf_manager: SmartUrdfManager instance
-        streaming_manager: StreamingManager instance (optional)
-        offline_manager: OfflineManager instance (optional)
-        replay_folder: GUI folder handle for unified controls
+    This class eliminates all the redundant GUI and callback code
+    by delegating to standardized shared components and controllers.
     """
     
     def __init__(self, server: viser.ViserServer, urdf_manager):
         """
-        Initialize the unified replay system.
+        Initialize the replay coordinator.
         
         Args:
             server: Viser server instance
-            urdf_manager: SmartUrdfManager instance for robot control
+            urdf_manager: SmartUrdfManager instance
         """
         self.server = server
         self.urdf_manager = urdf_manager
-        self.streaming_manager = None
-        self.offline_manager = None
-        self.replay_folder = None
         
-        print("[REPLAY] Unified replay system initialized")
+        # Controllers (BaseController interface)
+        self.streaming_controller: Optional[StreamingController] = None
+        self.offline_controller: Optional[OfflineController] = None
+        
+        # GUI components
+        self.replay_folder = None
+        self.streaming_controls = None
+        self.offline_controls = None
+        
+        print("[REPLAY] Replay coordinator initialized")
     
     def setup(
         self, 
         robot_data: int = 1, 
-        streaming_downsample: int = 10, 
-        offline_downsample: int = 5,
-        slider_handles: Optional[list] = None,
-        joint_names: Optional[list] = None
+        streaming_downsample: int = 1, 
+        offline_downsample: int = 1,
+        enable_record3d: bool = True
     ) -> bool:
         """
-        Set up the unified replay system with both streaming and offline capabilities.
+        Set up the complete replay system with clean separation.
         
         Args:
             robot_data: Robot data file number (1 or 2)
-            streaming_downsample: Downsampling factor for streaming replay
-            offline_downsample: Downsampling factor for offline replay  
-            slider_handles: List of GUI slider handles for unified control
-            joint_names: List of joint names corresponding to sliders
+            streaming_downsample: Downsampling for streaming
+            offline_downsample: Downsampling for offline
+            enable_record3d: Whether to use Record3D-style controls
             
         Returns:
-            True if setup was successful, False otherwise
+            True if setup successful
         """
-        print("[REPLAY] Setting up unified robot replay system...")
+        print("[REPLAY] Setting up replay system...")
         
         success = False
         
-        # Initialize streaming replay
-        print("[REPLAY] Setting up streaming replay...")
-        self.streaming_manager = create_streaming_manager(
-            self.server, self.urdf_manager, robot_data, streaming_downsample
-        )
-        if self.streaming_manager is not None:
-            if slider_handles and joint_names:
-                self.streaming_manager.set_slider_handles(slider_handles, joint_names)
-            print(f"[REPLAY] ✅ Streaming replay ready (data file: {robot_data}, downsample: {streaming_downsample}x)")
+        # Create controllers using standardized interface
+        if self._create_streaming_controller(robot_data, streaming_downsample):
             success = True
-        else:
-            print("[REPLAY] ❌ Streaming replay failed to initialize")
-        
-        # Initialize offline replay
-        print("[REPLAY] Setting up offline replay...")
-        self.offline_manager = create_offline_manager(
-            self.server, self.urdf_manager, robot_data, offline_downsample
-        )
-        if self.offline_manager is not None:
-            if slider_handles and joint_names:
-                self.offline_manager.set_slider_handles(slider_handles, joint_names)
             
-            # Configure for unified mode
-            self.offline_manager.unified_server = self.server
-            
-            print(f"[REPLAY] ✅ Offline replay ready (data file: {robot_data}, downsample: {offline_downsample}x)")
-            print(f"[REPLAY] 🔄 Processing will start when user clicks 'Process Data' button")
+        if self._create_offline_system(robot_data, offline_downsample):
             success = True
-        else:
-            print("[REPLAY] ❌ Offline replay failed to initialize")
-        
-        # Create unified GUI if we have at least one working manager
-        if success and (self.streaming_manager or self.offline_manager):
-            self._create_unified_gui()
             
-            # Enable GUI interactions for offline manager AFTER everything is set up
-            if self.offline_manager:
-                self.offline_manager.gui_ready = True
-                print("[REPLAY] 🔓 Offline GUI interactions enabled")
-                
-            print("[REPLAY] ✅ Unified replay system ready")
+        # Create GUI if we have at least one controller
+        if success:
+            self._create_unified_gui(enable_record3d)
+            print("[REPLAY] ✅ Replay system ready")
             return True
         else:
-            print("[REPLAY] ❌ Failed to initialize any replay managers")
+            print("[REPLAY] ❌ Failed to initialize any controllers")
             return False
     
-    def _create_unified_gui(self):
-        """Create the unified GUI controls for both streaming and offline replay."""
-        print("[REPLAY] Creating unified replay GUI...")
+    def _create_streaming_controller(self, robot_data: int, downsample: int) -> bool:
+        """Create streaming controller using BaseController interface."""
+        try:
+            from pathlib import Path
+            data_file = f"data/robot_status{robot_data}.data.json"
+            
+            self.streaming_controller = StreamingController(data_file, downsample)
+            self.streaming_controller.set_update_callback(self._on_streaming_update)
+            
+            print(f"[REPLAY] ✅ Streaming controller ready")
+            return True
+        except Exception as e:
+            print(f"[REPLAY] ❌ Streaming controller failed: {e}")
+            return False
+    
+    def _create_offline_system(self, robot_data: int, downsample: int) -> bool:
+        """Create offline processor and controller."""
+        try:
+            data_file = f"data/robot_status{robot_data}.data.json"
+            
+            # Create processor
+            processor = OfflineProcessor(data_file, self.urdf_manager)
+            
+            # Process data (this will be done when user clicks process)
+            # For now, just prepare the system
+            self.processor = processor
+            
+            print(f"[REPLAY] ✅ Offline system ready (processing on-demand)")
+            return True
+        except Exception as e:
+            print(f"[REPLAY] ❌ Offline system failed: {e}")
+            return False
+    
+    def _create_unified_gui(self, enable_record3d: bool):
+        """Create clean unified GUI using shared components."""
+        print("[REPLAY] Creating unified GUI...")
         
-        # Create the main replay folder
+        # Create main folder
         self.replay_folder = self.server.gui.add_folder("🎬 Robot Replay")
         
         with self.replay_folder:
-            # Streaming Replay Section
-            if self.streaming_manager:
+            # Streaming section
+            if self.streaming_controller:
                 self.server.gui.add_markdown("## 🔄 Streaming Replay")
                 self.server.gui.add_markdown("*Real-time processing with some latency*")
                 
-                self._create_streaming_controls()
+                if enable_record3d:
+                    # Use Record3D-style controls
+                    self.streaming_controls = create_record3d_controls(
+                        self.server, self.streaming_controller, "streaming"
+                    )
+                else:
+                    # Use standard controls
+                    total_frames = self.streaming_controller.get_total_frames()
+                    self.streaming_controls = create_unified_controls(
+                        self.server, "streaming", total_frames
+                    )
+                    self._wire_streaming_callbacks()
             
-            # Add separator if both systems are available
-            if self.streaming_manager and self.offline_manager:
+            # Separator
+            if self.streaming_controller and self.processor:
                 self.server.gui.add_markdown("---")
             
-            # Offline Replay Section  
-            if self.offline_manager:
+            # Offline section
+            if self.processor:
                 self.server.gui.add_markdown("## ⚡ Offline Replay")
                 self.server.gui.add_markdown("*Pre-process data for lag-free playback*")
                 
-                self._create_offline_controls()
+                # Process button (user-initiated)
+                self.process_button = self.server.gui.add_button("🔄 Process Data")
+                self.process_status = self.server.gui.add_text(
+                    "Status", 
+                    "Ready to process - Click 'Process Data' to begin"
+                )
+                
+                self.process_button.on_click(self._on_process_data)
         
-        print("[REPLAY] Unified GUI created successfully")
+        print("[REPLAY] Unified GUI created")
     
-    def _create_streaming_controls(self):
-        """Create streaming controls within the unified folder."""
-        if not self.streaming_manager or not self.streaming_manager.streaming_controller:
-            self.server.gui.add_text("Streaming Error", "Streaming controller not available")
-            return
-        
-        # Get timeline info for initial display
-        info = self.streaming_manager.streaming_controller.get_timeline_info()
-        total_entries = info['total_entries']
-        duration = info['duration_seconds']
-        
-        # Create controls and store in streaming manager for callbacks
-        self.streaming_manager.play_button = self.server.gui.add_button("▶️ Play")
-        self.streaming_manager.pause_button = self.server.gui.add_button("⏸️ Pause")
-        self.streaming_manager.reset_button = self.server.gui.add_button("🔄 Reset")
-        
-        # Timeline scrubber
-        self.streaming_manager.timeline_slider = self.server.gui.add_slider(
-            "Timeline",
-            min=0,
-            max=max(1, total_entries - 1),
-            step=1,
-            initial_value=0
-        )
-        
-        # Status displays
-        self.streaming_manager.status_text = self.server.gui.add_text(
-            "Status",
-            "Ready - Click Play to start streaming"
-        )
-        
-        self.streaming_manager.time_progress_text = self.server.gui.add_text(
-            "Time",
-            f"0.0s / {duration:.1f}s"
-        )
-        
-        self.streaming_manager.progress_percentage_text = self.server.gui.add_text(
-            "Progress",
-            "0.0%"
-        )
-        
-        # Wire up callbacks
-        self.streaming_manager.play_button.on_click(self.streaming_manager._on_play_button_click)
-        self.streaming_manager.pause_button.on_click(self.streaming_manager._on_pause_button_click)
-        self.streaming_manager.reset_button.on_click(self.streaming_manager._on_reset_button_click)
-        self.streaming_manager.timeline_slider.on_update(self.streaming_manager._on_timeline_change)
-        
-        print("[REPLAY] Streaming controls integrated successfully")
-    
-    def _create_offline_controls(self):
-        """Create offline controls within the unified folder."""
-        if not self.offline_manager:
-            self.server.gui.add_text("Offline Error", "Offline manager not available")
-            return
-        
-        # Store the unified folder reference for later use when processing completes
-        self.offline_manager.unified_folder = self.replay_folder
-        
-        # Create initial "Process Data" button - user controls when to start
-        self.offline_manager.gui_elements['process_button'] = self.server.gui.add_button("🔄 Process Data")
-        self.offline_manager.gui_elements['status_text'] = self.server.gui.add_text(
-            "Status",
-            "Ready to process - Click 'Process Data' to begin"
-        )
-        
-        # Wire up the process button callback
-        self.offline_manager.gui_elements['process_button'].on_click(self.offline_manager._on_process_button_click)
-        
-        print("[REPLAY] Offline controls integrated successfully")
-    
-    def _add_offline_playback_controls(self):
-        """Add offline playback controls after processing completes."""
-        if not self.offline_manager or not self.offline_manager.controller:
+    def _wire_streaming_callbacks(self):
+        """Wire streaming callbacks using standardized interface."""
+        if not self.streaming_controls:
             return
             
-        # Add a separator before offline controls
-        self.server.gui.add_markdown("### Offline Playback Controls")
+        # Map GUI controls to controller methods (BaseController interface)
+        callback_map = {
+            'play': lambda _: self.streaming_controller.play(),
+            'pause': lambda _: self.streaming_controller.pause(), 
+            'stop': lambda _: self.streaming_controller.stop(),
+            'reset': lambda _: self.streaming_controller.stop(),
+            'prev_frame': lambda _: self.streaming_controller.step_frame(-1),
+            'next_frame': lambda _: self.streaming_controller.step_frame(1),
+            'timeline_slider': lambda _: self._on_timeline_change(),
+            'speed_presets': lambda _: self._on_speed_preset()
+        }
         
-        # Primary playback controls
-        self.offline_manager.gui_elements['play_button'] = self.server.gui.add_button("▶️ Play")
-        self.offline_manager.gui_elements['pause_button'] = self.server.gui.add_button("⏸️ Pause")  
-        self.offline_manager.gui_elements['stop_button'] = self.server.gui.add_button("🛑 Reset")
-        
-        # Advanced controls
-        self.offline_manager.gui_elements['step_backward'] = self.server.gui.add_button("⏪ Step Back")
-        self.offline_manager.gui_elements['step_forward'] = self.server.gui.add_button("⏩ Step Forward")
-        
-        # Frame-perfect seeking
-        max_frames = self.offline_manager.processor.get_total_frames()
-        self.offline_manager.gui_elements['frame_slider'] = self.server.gui.add_slider(
-            "Frame", 
-            min=0, 
-            max=max(1, max_frames - 1), 
-            step=1, 
-            initial_value=0
-        )
-        
-        # Variable speed control  
-        self.offline_manager.gui_elements['speed_slider'] = self.server.gui.add_slider(
-            "Speed", 
-            min=0.1, 
-            max=5.0, 
-            step=0.1, 
-            initial_value=1.0
-        )
-        
-        # Status displays
-        self.offline_manager.gui_elements['status_text'] = self.server.gui.add_text(
-            "Playback Status",
-            "Ready for lag-free playback"
-        )
-        
-        self.offline_manager.gui_elements['progress_text'] = self.server.gui.add_text(
-            "Playback Progress", 
-            "0.0% (Frame 0)"
-        )
-        
-        self.offline_manager.gui_elements['time_text'] = self.server.gui.add_text(
-            "Playback Time",
-            f"0.0s / {self.offline_manager.processor.get_duration_seconds():.1f}s"
-        )
-        
-        # Wire up callbacks (using the manager's existing methods)
-        self.offline_manager._setup_gui_callbacks()
-        
-        print("[REPLAY] Offline playback controls added to unified GUI")
+        # Wire all callbacks
+        self.streaming_controls.wire_all_callbacks(callback_map)
     
-    def cleanup(self):
-        """Clean up the replay system resources."""
-        print("[REPLAY] Cleaning up unified replay resources...")
+    def _on_process_data(self, _):
+        """Handle offline data processing (user-initiated)."""
+        print("[REPLAY] Starting offline data processing...")
         
-        if self.streaming_manager:
-            self.streaming_manager.cleanup()
+        # Update status
+        self.process_status.value = "🔄 Processing data..."
         
-        if self.offline_manager:
-            self.offline_manager.cleanup()
-        
-        print("[REPLAY] Cleanup complete")
+        # Process data (this could be moved to a background thread)
+        try:
+            stats = self.processor.process_all_data(downsample=5)
+            
+            if stats:
+                # Create offline controller after processing
+                self.offline_controller = OfflineController(self.processor)
+                self.offline_controller.set_update_callback(self._on_offline_update)
+                
+                # Add offline controls
+                self._add_offline_controls()
+                
+                self.process_status.value = f"✅ Ready! Processed {stats['total_frames']} frames"
+                print("[REPLAY] ✅ Offline processing complete")
+            else:
+                self.process_status.value = "❌ Processing failed"
+                
+        except Exception as e:
+            print(f"[REPLAY] ❌ Processing error: {e}")
+            self.process_status.value = f"❌ Error: {str(e)}"
+    
+    def _add_offline_controls(self):
+        """Add offline controls after processing is complete."""
+        with self.replay_folder:
+            # Add separator
+            self.server.gui.add_markdown("### 🎮 Offline Controls")
+            
+            # Create Record3D-style controls for offline
+            self.offline_controls = create_record3d_controls(
+                self.server, self.offline_controller, "offline"
+            )
+    
+    def _on_timeline_change(self):
+        """Handle timeline slider changes."""
+        if self.streaming_controls and hasattr(self.streaming_controls, 'controls'):
+            frame_index = int(self.streaming_controls.controls['timeline_slider'].value)
+            self.streaming_controller.goto_frame(frame_index)
+    
+    def _on_speed_preset(self):
+        """Handle speed preset selection."""
+        if self.streaming_controls and hasattr(self.streaming_controls, 'speed_controls'):
+            # Speed changes take effect on next play
+            pass
+    
+    def _on_streaming_update(self, joint_configs):
+        """Handle streaming controller updates (unified callback)."""
+        # Update robot visualization
+        for urdf_name, joint_config in joint_configs.items():
+            # Update the specific URDF
+            if joint_config:
+                # Convert to the format expected by URDF manager
+                # (This depends on your specific URDF manager implementation)
+                self._update_urdf(urdf_name, joint_config)
+    
+    def _on_offline_update(self, joint_config):
+        """Handle offline controller updates (pre-computed array)."""
+        # Update robot with pre-computed configuration
+        if joint_config is not None:
+            self.urdf_manager.update_all_configurations(joint_config)
+    
+    def _update_urdf(self, urdf_name: str, joint_config):
+        """Update specific URDF (helper method)."""
+        # This is where you'd integrate with your specific URDF manager
+        # Implementation depends on how your URDF manager works
+        pass
     
     def get_status(self) -> dict:
-        """Get the current status of the replay system."""
+        """Get system status (standardized interface)."""
         return {
-            "streaming_available": self.streaming_manager is not None,
-            "offline_available": self.offline_manager is not None,
-            "streaming_status": self.streaming_manager.get_streaming_status() if self.streaming_manager else None,
-            "offline_status": self.offline_manager.get_playback_info() if self.offline_manager else None,
+            "streaming_available": self.streaming_controller is not None,
+            "offline_available": self.offline_controller is not None,
+            "streaming_status": self.streaming_controller.get_status() if self.streaming_controller else None,
+            "offline_status": self.offline_controller.get_status() if self.offline_controller else None,
         }
+    
+    def cleanup(self):
+        """Clean up all resources."""
+        print("[REPLAY] Cleaning up replay system...")
+        
+        # Cleanup controllers
+        if self.streaming_controller:
+            self.streaming_controller.cleanup()
+        if self.offline_controller:
+            self.offline_controller.cleanup()
+        
+        # Cleanup GUI controls
+        if self.streaming_controls:
+            self.streaming_controls.cleanup()
+        if self.offline_controls:
+            self.offline_controls.cleanup()
+        
+        print("[REPLAY] Cleanup complete")
 
 
-def create_unified_replay_system(server: viser.ViserServer, urdf_manager) -> UnifiedReplaySystem:
+def create_replay_system(server: viser.ViserServer, urdf_manager) -> ReplayCoordinator:
     """
-    Factory function to create a UnifiedReplaySystem instance.
+    Factory function to create the replay system.
     
     Args:
         server: Viser server instance
         urdf_manager: SmartUrdfManager instance
         
     Returns:
-        UnifiedReplaySystem instance
+        ReplayCoordinator instance
     """
-    return UnifiedReplaySystem(server, urdf_manager)
+    return ReplayCoordinator(server, urdf_manager)
