@@ -97,6 +97,11 @@ class ReplayCoordinator:
             from pathlib import Path
             data_file = f"data/robot_status{robot_data}.data.json"
             
+            print(f"[DEBUG] ReplayCoordinator._create_streaming_controller() called with:")
+            print(f"[DEBUG]   robot_data: {robot_data}")
+            print(f"[DEBUG]   downsample: {downsample}")
+            print(f"[DEBUG]   data_file: {data_file}")
+            
             self.streaming_controller = StreamingController(data_file, downsample)
             self.streaming_controller.set_update_callback(self._on_streaming_update)
             
@@ -242,26 +247,17 @@ class ReplayCoordinator:
             pass
     
     def _on_streaming_update(self, joint_configs):
-        """Handle streaming controller updates (unified callback)."""
-        # Update robot visualization
+        """Handle streaming controller updates (efficient per-URDF approach)."""
+        # Use the new efficient update method from URDF manager
         for urdf_name, joint_config in joint_configs.items():
-            # Update the specific URDF
             if joint_config:
-                # Convert to the format expected by URDF manager
-                # (This depends on your specific URDF manager implementation)
-                self._update_urdf(urdf_name, joint_config)
+                self.urdf_manager.update_specific_urdf(urdf_name, joint_config)
     
     def _on_offline_update(self, joint_config):
         """Handle offline controller updates (pre-computed array)."""
-        # Update robot with pre-computed configuration
+        # Update robot with pre-computed configuration using unified array approach
         if joint_config is not None:
             self.urdf_manager.update_all_configurations(joint_config)
-    
-    def _update_urdf(self, urdf_name: str, joint_config):
-        """Update specific URDF (helper method)."""
-        # This is where you'd integrate with your specific URDF manager
-        # Implementation depends on how your URDF manager works
-        pass
     
     def get_status(self) -> dict:
         """Get system status (standardized interface)."""
