@@ -1,7 +1,7 @@
 """
 Offline Replay System - Lag-Free Robot Data Playback
 
-This module implements true offline replay with two-phase processing:
+This module implements offline replay with two-phase processing:
 
 Phase 1: Pre-processing (upfront cost ~30s)
 - Parse ALL robot data at once  
@@ -15,20 +15,16 @@ Phase 2: Ultra-fast playback (zero latency)
 - Frame-perfect controls
 
 Usage:
-    from backends.viser.replay.offline import OfflineManager
-    
-    # Create and initialize (handles both phases)
-    offline_manager = OfflineManager(server, urdf_manager, robot_data=1)
-    await offline_manager.initialize_async(downsample=5)
+    # Use through the main replay system
+    from backends.viser.replay import create_replay_system
+    replay_system = create_replay_system(server, urdf_manager)
+    replay_system.setup(robot_data=1)
 """
 
 from .processor import OfflineProcessor
 from .controller import OfflineController  
-from .manager import OfflineManager, create_offline_manager
 
 __all__ = [
     'OfflineProcessor',
-    'OfflineController', 
-    'OfflineManager',
-    'create_offline_manager'
+    'OfflineController'
 ]
